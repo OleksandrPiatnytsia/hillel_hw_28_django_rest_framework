@@ -10,13 +10,17 @@
 - no PUT / PATCH / DELETE.
 """
 
+import threading
 from decimal import Decimal
 
 import pytest
+from django.contrib.auth.models import Group
+from django.db import IntegrityError, connection
+from rest_framework.test import APIClient
 
 from orders.models import Order
 from payments.models import Payment
-from tests.factories import BookFactory, OrderFactory, PaymentFactory
+from tests.factories import BookFactory, OrderFactory, PaymentFactory, UserFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -275,3 +279,211 @@ def test_an_order_cannot_be_changed_or_deleted(as_user, customer, method):
 
     assert response.status_code == 405
     assert Order.objects.filter(pk=order.pk, total=order.total).exists()
+
+
+# ---------------------------------------------------------------------------
+# Idempotency-Key: a repeated request doesn't create a second order
+# ---------------------------------------------------------------------------
+
+
+def test_the_same_key_twice_gives_the_same_order(
+    as_user, customer, mailoutbox, django_capture_on_commit_callbacks
+):
+    # A client didn't get the answer (timeout) and sends the request again
+    book = BookFactory(stock=5)
+    client = as_user(customer)
+    data = order_data((book, 2))
+
+    with django_capture_on_commit_callbacks(execute=True):
+        first = client.post("/api/orders/", data, format="json", HTTP_IDEMPOTENCY_KEY="key-1")
+        second = client.post("/api/orders/", data, format="json", HTTP_IDEMPOTENCY_KEY="key-1")
+
+    assert first.status_code == second.status_code == 201
+    assert second.json()["id"] == first.json()["id"]
+    assert "Idempotent-Replayed" not in first
+    assert second["Idempotent-Replayed"] == "true"
+    # One order, the copies reserved once, one email
+    assert Order.objects.count() == 1
+    assert Order.objects.get().idempotency_key == "key-1"
+    book.refresh_from_db()
+    assert book.stock == 3
+    assert len(mailoutbox) == 1
+
+
+def test_the_same_key_with_another_order_is_422(as_user, customer):
+    book = BookFactory(stock=5)
+    client = as_user(customer)
+    client.post("/api/orders/", order_data((book, 1)), format="json", HTTP_IDEMPOTENCY_KEY="key-1")
+
+    other_quantity = client.post(
+        "/api/orders/", order_data((book, 2)), format="json", HTTP_IDEMPOTENCY_KEY="key-1"
+    )
+    other_address = client.post(
+        "/api/orders/",
+        order_data((book, 1), address="Lviv, Rynok 1"),
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="key-1",
+    )
+
+    assert other_quantity.status_code == 422
+    assert other_address.status_code == 422
+    assert Order.objects.count() == 1
+
+
+def test_the_same_request_is_recognised_after_cleaning(as_user, customer):
+    # The phone in another format is the same phone ("+380671234567")
+    book = BookFactory(stock=5)
+    client = as_user(customer)
+    client.post("/api/orders/", order_data((book, 1)), format="json", HTTP_IDEMPOTENCY_KEY="k")
+
+    again = client.post(
+        "/api/orders/",
+        order_data((book, 1), phone="+380671234567"),
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="k",
+    )
+
+    assert again.status_code == 201
+    assert again["Idempotent-Replayed"] == "true"
+
+
+def test_keys_are_separate_for_every_user(as_user, customer, other_customer):
+    book = BookFactory(stock=5)
+    data = order_data((book, 1))
+
+    as_user(customer).post("/api/orders/", data, format="json", HTTP_IDEMPOTENCY_KEY="same")
+    response = as_user(other_customer).post(
+        "/api/orders/", data, format="json", HTTP_IDEMPOTENCY_KEY="same"
+    )
+
+    # Not the order of another user: a new one
+    assert response.status_code == 201
+    assert "Idempotent-Replayed" not in response
+    assert Order.objects.count() == 2
+
+
+def test_a_failed_request_does_not_use_up_the_key(as_user, customer):
+    # 400 (not enough copies) saves nothing: the corrected request with the
+    # same key creates the order
+    book = BookFactory(stock=1)
+    client = as_user(customer)
+
+    failed = client.post(
+        "/api/orders/", order_data((book, 3)), format="json", HTTP_IDEMPOTENCY_KEY="k"
+    )
+    fixed = client.post(
+        "/api/orders/", order_data((book, 1)), format="json", HTTP_IDEMPOTENCY_KEY="k"
+    )
+
+    assert failed.status_code == 400
+    assert fixed.status_code == 201
+    assert "Idempotent-Replayed" not in fixed
+
+
+def test_too_long_key_is_400(as_user, customer):
+    response = as_user(customer).post(
+        "/api/orders/",
+        order_data((BookFactory(), 1)),
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="k" * 256,
+    )
+
+    assert response.status_code == 400
+    assert "Idempotency-Key" in response.json()
+    assert not Order.objects.exists()
+
+
+def test_parallel_request_with_the_same_key_gets_the_first_order(
+    as_user, customer, monkeypatch
+):
+    # Two requests at the same moment: both look for the key BEFORE the
+    # other one has saved its order. Simulated: the first order already
+    # exists, but the first lookup of the view misses it, as it would for
+    # a request that started before that order was committed.
+    from api.views.orders import OrderViewSet
+
+    book = BookFactory(stock=5)
+    first = OrderFactory(
+        user=customer,
+        idempotency_key="k",
+        items=[(book, 2)],
+        full_name="Ann Shevchenko",
+        phone="+380671234567",
+        address="Kyiv, Khreshchatyk 1",
+    )
+    real_lookup = OrderViewSet._order_by_key
+    lookups = []
+
+    def lookup_that_misses_once(self, key):
+        lookups.append(key)
+        return None if len(lookups) == 1 else real_lookup(self, key)
+
+    monkeypatch.setattr(OrderViewSet, "_order_by_key", lookup_that_misses_once)
+
+    response = as_user(customer).post(
+        "/api/orders/", order_data((book, 2)), format="json", HTTP_IDEMPOTENCY_KEY="k"
+    )
+
+    # create_order() hit the unique constraint, its transaction was rolled
+    # back; the second lookup found the first order
+    assert lookups == ["k", "k"]
+    assert response.status_code == 201
+    assert response.json()["id"] == first.pk
+    assert response["Idempotent-Replayed"] == "true"
+    assert Order.objects.count() == 1
+    book.refresh_from_db()
+    assert book.stock == 5  # OrderFactory reserves nothing, the rollback returned the 2
+
+
+def test_other_database_errors_are_not_hidden_as_a_replay(as_user, customer, monkeypatch):
+    # IntegrityError without a key (or with a key nobody used) is a real
+    # error: it must reach the error log (500), not become an "old order"
+    def broken_create_order(*args, **kwargs):
+        raise IntegrityError("another constraint")
+
+    monkeypatch.setattr("api.views.orders.create_order", broken_create_order)
+
+    with pytest.raises(IntegrityError):
+        as_user(customer).post("/api/orders/", order_data((BookFactory(), 1)), format="json")
+
+
+# transaction=True: real COMMITs, the two threads see each other's data and
+# locks (like test_only_one_of_two_simultaneous_orders_gets_the_last_copy).
+# serialized_rollback=True: the groups of the migrations come back after it.
+@pytest.mark.django_db(transaction=True, serialized_rollback=True)
+def test_two_simultaneous_requests_with_the_same_key_make_one_order():
+    book = BookFactory(stock=5)
+    customer = UserFactory(username="ann")
+    data = order_data((book, 2))
+    # Both threads wait here and send the request at the same moment
+    start = threading.Barrier(2)
+    answers = []
+
+    def send():
+        try:
+            client = APIClient()
+            client.force_authenticate(customer)
+            start.wait()
+            response = client.post(
+                "/api/orders/", data, format="json", HTTP_IDEMPOTENCY_KEY="same-key"
+            )
+            replayed = response.has_header("Idempotent-Replayed")
+            answers.append((response.status_code, response.json()["id"], replayed))
+        finally:
+            # Every thread has its own database connection
+            connection.close()
+
+    threads = [threading.Thread(target=send) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    # Both got 201 with the same order; one of the answers is the replay
+    assert [status for status, _, _ in answers] == [201, 201]
+    assert answers[0][1] == answers[1][1]
+    assert sorted(replayed for _, _, replayed in answers) == [False, True]
+    assert Order.objects.count() == 1
+    book.refresh_from_db()
+    assert book.stock == 3
+    assert Group.objects.filter(name="Managers").exists()

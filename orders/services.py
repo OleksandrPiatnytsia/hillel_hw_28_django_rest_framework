@@ -28,8 +28,13 @@ class OrderError(Exception):
         super().__init__("; ".join(self.messages))
 
 
-def create_order(user, quantities, *, full_name, phone, address):
+def create_order(user, quantities, *, full_name, phone, address, idempotency_key=""):
     """Create an order from {book_id: quantity} and reserve the stock.
+
+    idempotency_key: the Idempotency-Key header of the API (the site sends
+    none). Saved with the order; a second order of this user with the same
+    key raises IntegrityError (unique constraint) and the whole transaction
+    is rolled back, the stock too.
 
     Everything inside transaction.atomic(): either the order, all its items
     and all stock changes are saved together, or nothing (an exception in
@@ -100,6 +105,7 @@ def create_order(user, quantities, *, full_name, phone, address):
             full_name=full_name,
             phone=phone,
             address=address,
+            idempotency_key=idempotency_key,
         )
 
         items = []

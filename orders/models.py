@@ -75,6 +75,14 @@ class Order(models.Model):
         default=Decimal("0.00"),
         validators=[MinValueValidator(Decimal("0.00"))],
     )
+    # The Idempotency-Key header of POST /api/orders/: a client that sends
+    # the same request again (no answer because of a timeout, a retry)
+    # gets the order made by the first one instead of a second order.
+    # Unique per user (see Meta.constraints); "" = no key (the site, an
+    # API request without the header). editable=False: not in admin forms.
+    idempotency_key = models.CharField(
+        _("idempotency key"), max_length=255, blank=True, default="", editable=False
+    )
     created_at = models.DateTimeField(_("created at"), auto_now_add=True)
     updated_at = models.DateTimeField(_("updated at"), auto_now=True)
 
@@ -88,6 +96,17 @@ class Order(models.Model):
             models.CheckConstraint(
                 condition=models.Q(total__gte=0),
                 name="orders_order_total_not_negative",
+            ),
+            # One order per key of a user. In the database, not only a check
+            # in the code: two requests with the same key at the same moment
+            # both pass a check "is there an order with this key?", but only
+            # one INSERT passes the unique index, the other one gets an
+            # IntegrityError (api.views.orders handles it).
+            # condition: orders without a key ("") are not limited.
+            models.UniqueConstraint(
+                fields=["user", "idempotency_key"],
+                condition=~models.Q(idempotency_key=""),
+                name="orders_order_unique_idempotency_key_per_user",
             ),
         ]
 

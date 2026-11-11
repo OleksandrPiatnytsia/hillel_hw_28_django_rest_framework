@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Bookstore\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 11:54+0000\n"
+"POT-Creation-Date: 2026-11-11 12:40+0000\n"
 "PO-Revision-Date: 2026-11-10 16:00+0200\n"
 "Last-Translator: Bookstore\n"
 "Language-Team: Ukrainian\n"
@@ -20,6 +20,14 @@ msgstr ""
 #: api/exceptions.py:16
 msgid "The object is used by other objects and can't be deleted."
 msgstr "Об'єкт використовується іншими об'єктами, його не можна видалити."
+
+#: api/exceptions.py:31
+msgid ""
+"This Idempotency-Key was already used for a different order. Send a new key "
+"for a new order."
+msgstr ""
+"Цей Idempotency-Key уже використано для іншого замовлення. Для нового "
+"замовлення надішліть новий ключ."
 
 #: api/filters.py:34 books/forms.py:168
 msgid "“Price from” can't be greater than “Price to”."
@@ -46,6 +54,11 @@ msgstr "В автора є книги, його не можна видалити
 msgid "The category has books and can't be deleted."
 msgstr "У категорії є книги, її не можна видалити."
 
+#: api/views/orders.py:186
+#, python-format
+msgid "At most %(max)s characters."
+msgstr "Не більше %(max)s символів."
+
 #: books/admin.py:28 books/models.py:43 books/models.py:140
 msgid "category"
 msgstr "категорія"
@@ -55,7 +68,7 @@ msgid "categories"
 msgstr "категорії"
 
 #: books/admin.py:37 books/models.py:99 books/models.py:139
-#: orders/models.py:189
+#: orders/models.py:208
 msgid "book"
 msgstr "книга"
 
@@ -216,11 +229,11 @@ msgstr "автор"
 msgid "authors"
 msgstr "автори"
 
-#: books/models.py:68 orders/models.py:198
+#: books/models.py:68 orders/models.py:217
 msgid "title"
 msgstr "назва"
 
-#: books/models.py:76 orders/models.py:200
+#: books/models.py:76 orders/models.py:219
 msgid "price"
 msgstr "ціна"
 
@@ -232,11 +245,11 @@ msgstr "опис"
 msgid "stock"
 msgstr "залишок"
 
-#: books/models.py:92 orders/models.py:78 payments/models.py:63
+#: books/models.py:92 orders/models.py:86 payments/models.py:63
 msgid "created at"
 msgstr "створено"
 
-#: books/models.py:93 orders/models.py:79 payments/models.py:64
+#: books/models.py:93 orders/models.py:87 payments/models.py:64
 msgid "updated at"
 msgstr "оновлено"
 
@@ -562,7 +575,7 @@ msgstr "Очистити кошик"
 msgid "Checkout"
 msgstr "Оформлення замовлення"
 
-#: cart/templates/cart/cart_detail.html:94 orders/services.py:50
+#: cart/templates/cart/cart_detail.html:94 orders/services.py:55
 msgid "The cart is empty."
 msgstr "Кошик порожній."
 
@@ -575,7 +588,7 @@ msgstr "Перейти до каталогу"
 msgid "Quantity must be a whole number, 1 or more."
 msgstr "Кількість має бути цілим числом, від 1."
 
-#: cart/views.py:54 orders/services.py:80
+#: cart/views.py:54 orders/services.py:85
 #, python-format
 msgid "“%(title)s” is out of stock."
 msgstr "«%(title)s» немає в наявності."
@@ -599,11 +612,11 @@ msgstr "«%(title)s» прибрано з кошика."
 msgid "The cart is empty now."
 msgstr "Кошик тепер порожній."
 
-#: config/settings.py:267
+#: config/settings.py:268
 msgid "Ukrainian"
 msgstr "Українська"
 
-#: config/settings.py:268
+#: config/settings.py:269
 msgid "English"
 msgstr "Англійська"
 
@@ -767,36 +780,40 @@ msgstr "адреса доставки"
 msgid "total"
 msgstr "сума"
 
-#: orders/models.py:83 orders/models.py:182 payments/models.py:34
+#: orders/models.py:84
+msgid "idempotency key"
+msgstr "ключ ідемпотентності"
+
+#: orders/models.py:91 orders/models.py:201 payments/models.py:34
 msgid "order"
 msgstr "замовлення"
 
-#: orders/models.py:84
+#: orders/models.py:92
 msgid "orders"
 msgstr "замовлення"
 
-#: orders/models.py:97
+#: orders/models.py:116
 #, python-format
 msgid "Order #%(number)s"
 msgstr "Замовлення #%(number)s"
 
-#: orders/models.py:206
+#: orders/models.py:225
 msgid "quantity"
 msgstr "кількість"
 
-#: orders/models.py:212
+#: orders/models.py:231
 msgid "order item"
 msgstr "позиція замовлення"
 
-#: orders/models.py:213
+#: orders/models.py:232
 msgid "order items"
 msgstr "позиції замовлення"
 
-#: orders/services.py:77
+#: orders/services.py:82
 msgid "A book from your cart is no longer sold."
 msgstr "Однієї з книг з вашого кошика більше немає в продажу."
 
-#: orders/services.py:87
+#: orders/services.py:92
 #, python-format
 msgid "“%(title)s”: only %(stock)s copy left, you ordered %(quantity)s."
 msgid_plural ""
@@ -813,21 +830,21 @@ msgstr[3] ""
 "«%(title)s»: залишилося лише %(stock)s примірника, а ви замовили "
 "%(quantity)s."
 
-#: orders/services.py:164 payments/services.py:191
+#: orders/services.py:170 payments/services.py:191
 msgid "Order not found."
 msgstr "Замовлення не знайдено."
 
-#: orders/services.py:166
+#: orders/services.py:172
 #, python-format
 msgid "%(order)s can't be cancelled any more."
 msgstr "%(order)s вже не можна скасувати."
 
-#: orders/services.py:168
+#: orders/services.py:174
 #, python-format
 msgid "%(order)s is already cancelled."
 msgstr "%(order)s уже скасовано."
 
-#: orders/services.py:173
+#: orders/services.py:179
 #, python-format
 msgid "%(order)s is not a new unpaid order any more."
 msgstr "%(order)s уже не є новим неоплаченим замовленням."

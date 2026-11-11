@@ -9,7 +9,12 @@ description=...) puts a text for the user of the API in their place.
 The texts are in English, like the rest of the API (field names, codes).
 """
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
 
 from .serializers.catalog import AuthorSerializer, BookSerializer, CategorySerializer
 from .serializers.orders import OrderSerializer
@@ -123,6 +128,20 @@ ORDER_CREATE = dict(
         "are reserved right away. 400 with \"items\" when there are not "
         "enough copies: nothing is saved then. Payment: open \"site_url\" "
         "of the answer, the order page has the \"Pay\" button."
+    ),
+)
+
+IDEMPOTENCY_KEY_PARAMETER = OpenApiParameter(
+    name="Idempotency-Key",
+    location=OpenApiParameter.HEADER,
+    type=str,
+    required=False,
+    description=(
+        "Optional, up to 255 characters, a new one for every new order "
+        "(e.g. a UUID). Send the same request with the same key again (a "
+        "timeout, a retry) and the answer is the order of the first request, "
+        "201 with the header \"Idempotent-Replayed: true\": no second order. "
+        "The same key with other books or another address: 422."
     ),
 )
 

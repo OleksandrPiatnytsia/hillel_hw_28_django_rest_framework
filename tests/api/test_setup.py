@@ -184,3 +184,17 @@ def test_cors_preflight_allows_the_authorization_header(api_client):
     assert response.status_code == 200
     assert response["Access-Control-Allow-Origin"] == "http://localhost:3000"
     assert "authorization" in response["Access-Control-Allow-Headers"]
+
+
+def test_cors_allows_the_idempotency_key_header(api_client):
+    # Without "idempotency-key" in CORS_ALLOW_HEADERS a browser would not
+    # send POST /api/orders/ with this header at all
+    response = api_client.options(
+        "/api/orders/",
+        HTTP_ORIGIN="http://localhost:3000",
+        HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+        HTTP_ACCESS_CONTROL_REQUEST_HEADERS="authorization, content-type, idempotency-key",
+    )
+
+    assert response.status_code == 200
+    assert "idempotency-key" in response["Access-Control-Allow-Headers"]

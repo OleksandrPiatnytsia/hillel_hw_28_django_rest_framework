@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Bookstore\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 11:54+0000\n"
+"POT-Creation-Date: 2026-11-11 12:40+0000\n"
 "PO-Revision-Date: 2026-11-10 16:00+0200\n"
 "Last-Translator: Bookstore\n"
 "Language-Team: English\n"
@@ -19,6 +19,12 @@ msgstr ""
 
 #: api/exceptions.py:16
 msgid "The object is used by other objects and can't be deleted."
+msgstr ""
+
+#: api/exceptions.py:31
+msgid ""
+"This Idempotency-Key was already used for a different order. Send a new key "
+"for a new order."
 msgstr ""
 
 #: api/filters.py:34 books/forms.py:168
@@ -45,6 +51,11 @@ msgstr ""
 msgid "The category has books and can't be deleted."
 msgstr ""
 
+#: api/views/orders.py:186
+#, python-format
+msgid "At most %(max)s characters."
+msgstr ""
+
 #: books/admin.py:28 books/models.py:43 books/models.py:140
 msgid "category"
 msgstr ""
@@ -54,7 +65,7 @@ msgid "categories"
 msgstr ""
 
 #: books/admin.py:37 books/models.py:99 books/models.py:139
-#: orders/models.py:189
+#: orders/models.py:208
 msgid "book"
 msgstr ""
 
@@ -215,11 +226,11 @@ msgstr ""
 msgid "authors"
 msgstr ""
 
-#: books/models.py:68 orders/models.py:198
+#: books/models.py:68 orders/models.py:217
 msgid "title"
 msgstr ""
 
-#: books/models.py:76 orders/models.py:200
+#: books/models.py:76 orders/models.py:219
 msgid "price"
 msgstr ""
 
@@ -231,11 +242,11 @@ msgstr ""
 msgid "stock"
 msgstr ""
 
-#: books/models.py:92 orders/models.py:78 payments/models.py:63
+#: books/models.py:92 orders/models.py:86 payments/models.py:63
 msgid "created at"
 msgstr ""
 
-#: books/models.py:93 orders/models.py:79 payments/models.py:64
+#: books/models.py:93 orders/models.py:87 payments/models.py:64
 msgid "updated at"
 msgstr ""
 
@@ -552,7 +563,7 @@ msgstr ""
 msgid "Checkout"
 msgstr ""
 
-#: cart/templates/cart/cart_detail.html:94 orders/services.py:50
+#: cart/templates/cart/cart_detail.html:94 orders/services.py:55
 msgid "The cart is empty."
 msgstr ""
 
@@ -565,7 +576,7 @@ msgstr ""
 msgid "Quantity must be a whole number, 1 or more."
 msgstr ""
 
-#: cart/views.py:54 orders/services.py:80
+#: cart/views.py:54 orders/services.py:85
 #, python-format
 msgid "“%(title)s” is out of stock."
 msgstr ""
@@ -589,11 +600,11 @@ msgstr ""
 msgid "The cart is empty now."
 msgstr ""
 
-#: config/settings.py:267
+#: config/settings.py:268
 msgid "Ukrainian"
 msgstr ""
 
-#: config/settings.py:268
+#: config/settings.py:269
 msgid "English"
 msgstr ""
 
@@ -755,36 +766,40 @@ msgstr ""
 msgid "total"
 msgstr ""
 
-#: orders/models.py:83 orders/models.py:182 payments/models.py:34
+#: orders/models.py:84
+msgid "idempotency key"
+msgstr ""
+
+#: orders/models.py:91 orders/models.py:201 payments/models.py:34
 msgid "order"
 msgstr ""
 
-#: orders/models.py:84
+#: orders/models.py:92
 msgid "orders"
 msgstr ""
 
-#: orders/models.py:97
+#: orders/models.py:116
 #, python-format
 msgid "Order #%(number)s"
 msgstr ""
 
-#: orders/models.py:206
+#: orders/models.py:225
 msgid "quantity"
 msgstr ""
 
-#: orders/models.py:212
+#: orders/models.py:231
 msgid "order item"
 msgstr ""
 
-#: orders/models.py:213
+#: orders/models.py:232
 msgid "order items"
 msgstr ""
 
-#: orders/services.py:77
+#: orders/services.py:82
 msgid "A book from your cart is no longer sold."
 msgstr ""
 
-#: orders/services.py:87
+#: orders/services.py:92
 #, python-format
 msgid "“%(title)s”: only %(stock)s copy left, you ordered %(quantity)s."
 msgid_plural ""
@@ -792,21 +807,21 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: orders/services.py:164 payments/services.py:191
+#: orders/services.py:170 payments/services.py:191
 msgid "Order not found."
 msgstr ""
 
-#: orders/services.py:166
+#: orders/services.py:172
 #, python-format
 msgid "%(order)s can't be cancelled any more."
 msgstr ""
 
-#: orders/services.py:168
+#: orders/services.py:174
 #, python-format
 msgid "%(order)s is already cancelled."
 msgstr ""
 
-#: orders/services.py:173
+#: orders/services.py:179
 #, python-format
 msgid "%(order)s is not a new unpaid order any more."
 msgstr ""

@@ -17,7 +17,9 @@ Who sees what (get_queryset):
 
 import logging
 
+from django.db import IntegrityError
 from django.db.models import Q, Sum
+from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -29,12 +31,26 @@ from orders.models import Order
 from orders.services import OrderError, cancel_order, create_order
 from payments.models import Payment
 
-from ..docs import ORDER_CANCEL, ORDER_CANCEL_ERRORS, ORDER_CREATE, UNAUTHORIZED, order_list_schema
-from ..exceptions import Conflict
+from ..docs import (
+    IDEMPOTENCY_KEY_PARAMETER,
+    ORDER_CANCEL,
+    ORDER_CANCEL_ERRORS,
+    ORDER_CREATE,
+    UNAUTHORIZED,
+    order_list_schema,
+)
+from ..exceptions import Conflict, IdempotencyKeyReused
 from ..permissions import IsOwnerOrReadOnly
 from ..serializers.orders import OrderCreateSerializer, OrderSerializer
 
 logger = logging.getLogger(__name__)  # "api.views.orders"
+
+# The header of POST /api/orders/ (the name used by Stripe and the IETF
+# draft "The Idempotency-Key HTTP Header Field")
+IDEMPOTENCY_HEADER = "Idempotency-Key"
+# Added to a repeated answer: "this is the order of your first request"
+REPLAYED_HEADER = "Idempotent-Replayed"
+IDEMPOTENCY_KEY_MAX_LENGTH = Order._meta.get_field("idempotency_key").max_length
 
 
 @order_list_schema
@@ -88,10 +104,12 @@ class OrderViewSet(
 
     @extend_schema(
         request=OrderCreateSerializer,
+        parameters=[IDEMPOTENCY_KEY_PARAMETER],
         responses={
             201: OrderSerializer,
             400: OpenApiResponse(description="Invalid fields or not enough copies."),
             401: UNAUTHORIZED,
+            422: OpenApiResponse(description="The Idempotency-Key was used for another order."),
         },
         **ORDER_CREATE,
     )
@@ -101,9 +119,24 @@ class OrderViewSet(
         Our own create() instead of CreateModelMixin's: the request and the
         answer have different serializers, and the order is made by
         orders.services.create_order(), not by serializer.save().
+
+        Idempotency-Key (optional header, any unique text, e.g. a UUID):
+            1st request with a key   -> 201, a new order, the key is saved with it
+            the same key + same body -> 201 with the SAME order and the header
+                                        "Idempotent-Replayed: true"; nothing new
+                                        is created or reserved, no second email
+            the same key + other body -> 422 (IdempotencyKeyReused)
+        A request that failed (400, not enough copies) saves nothing, the key
+        neither: it may be sent again with the same key.
         """
+        key = self._idempotency_key(request)
         serializer = OrderCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)  # 400 with the errors of the fields
+
+        # The usual repeat: the first request has finished long ago
+        if key and (existing := self._order_by_key(key)) is not None:
+            return self._replay(existing, serializer)
+
         data = serializer.validated_data
         try:
             order = create_order(
@@ -112,7 +145,17 @@ class OrderViewSet(
                 full_name=data["full_name"],
                 phone=data["phone"],
                 address=data["address"],
+                idempotency_key=key,
             )
+        except IntegrityError:
+            # Two requests with the same key at the same moment: both found
+            # no order above, the first one committed, the INSERT of this one
+            # broke the unique constraint (its transaction is rolled back, the
+            # stock is untouched). Answer with the order of the first one.
+            existing = self._order_by_key(key) if key else None
+            if existing is None:
+                raise  # another constraint: a real error, 500
+            return self._replay(existing, serializer)
         except OrderError as error:
             # Not enough copies (every book with a problem at once). 400 on
             # "items": the client changes the quantities and sends again.
@@ -123,12 +166,64 @@ class OrderViewSet(
             "API order created: id=%s total=%s items=%s by user=%s",
             order.pk, order.total, len(serializer.quantities()), request.user.username,
         )
+        if key:
+            logger.info("API order id=%s idempotency key=%r", order.pk, key)
         # Read again through get_queryset(): the answer has the same
         # fields as GET /api/orders/<pk>/ (the paid sum, the lines with books)
         order = self.get_queryset().get(pk=order.pk)
         return Response(
             OrderSerializer(order, context=self.get_serializer_context()).data,
             status=status.HTTP_201_CREATED,
+        )
+
+    def _idempotency_key(self, request):
+        """The Idempotency-Key header: "" without it; 400 if it is too long."""
+        key = request.headers.get(IDEMPOTENCY_HEADER, "").strip()
+        if len(key) > IDEMPOTENCY_KEY_MAX_LENGTH:
+            raise ValidationError(
+                {
+                    IDEMPOTENCY_HEADER: [
+                        _("At most %(max)s characters.") % {"max": IDEMPOTENCY_KEY_MAX_LENGTH}
+                    ]
+                }
+            )
+        return key
+
+    def _order_by_key(self, key):
+        """The order of THIS user with this key (with the lines), or None.
+
+        Through get_queryset(), but filtered by the user also for staff:
+        the keys are unique per user, a manager's key may be the same as
+        a customer's one.
+        """
+        return self.get_queryset().filter(user=self.request.user, idempotency_key=key).first()
+
+    def _replay(self, order, serializer):
+        """The answer to a repeated request: the existing order, or 422.
+
+        "The same request" = the same books and quantities and the same
+        delivery data (after the cleaning of the serializer: "+380 67 ..."
+        and "+38067..." are equal). The order is shown as it is NOW: a
+        repeat after the payment shows "paid".
+        """
+        data = serializer.validated_data
+        same = {item.book_id: item.quantity for item in order.items.all()} == (
+            serializer.quantities()
+        ) and (order.full_name, order.phone, order.address) == (
+            data["full_name"],
+            data["phone"],
+            data["address"],
+        )
+        if not same:
+            raise IdempotencyKeyReused()
+        logger.info(
+            "API order replayed: id=%s key=%r by user=%s",
+            order.pk, order.idempotency_key, self.request.user.username,
+        )
+        return Response(
+            OrderSerializer(order, context=self.get_serializer_context()).data,
+            status=status.HTTP_201_CREATED,
+            headers={REPLAYED_HEADER: "true"},
         )
 
     @extend_schema(

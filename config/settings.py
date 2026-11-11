@@ -16,6 +16,7 @@ from datetime import timedelta
 from importlib.util import find_spec
 from pathlib import Path
 
+from corsheaders.defaults import default_headers
 from django.utils.translation import gettext_lazy as _
 from dotenv import load_dotenv
 
@@ -502,6 +503,12 @@ CORS_ALLOWED_ORIGINS = [
 # Only the API: the pages of the site (forms, the cart, the payment) are
 # never opened to other domains
 CORS_URLS_REGEX = r"^/api/.*$"
+# Headers a page from another domain may send: the standard ones
+# (authorization, content-type, ...) + Idempotency-Key of POST /api/orders/.
+# Without it the browser's preflight check fails and the POST is never sent.
+CORS_ALLOW_HEADERS = (*default_headers, "idempotency-key")
+# Answer headers its JavaScript may read (the others are hidden by the browser)
+CORS_EXPOSE_HEADERS = ["Idempotent-Replayed"]
 
 
 # Logging
