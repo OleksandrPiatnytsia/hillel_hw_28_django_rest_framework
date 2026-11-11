@@ -43,6 +43,9 @@ STRIPE_WEBHOOK_SECRET = "whsec_test_fake"
 SITE_URL = "http://testserver"
 DEFAULT_FROM_EMAIL = "Bookstore <noreply@localhost>"
 
+# CORS: fixed origins, the tests don't depend on CORS_ALLOWED_ORIGINS in .env
+CORS_ALLOWED_ORIGINS = ["http://localhost:3000"]
+
 # Remove the "file" handler: dictConfig opens the file of every handler in
 # the list, even an unused one. Records still go to the console handler,
 # pytest captures them and shows them only for a failed test.

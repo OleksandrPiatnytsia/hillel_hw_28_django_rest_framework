@@ -20,6 +20,15 @@ urlpatterns = [
     path("orders/", include("orders.urls")),
     # "Pay" button and Stripe's return pages: /payments/pay/<order_id>/, ...
     path("payments/", include("payments.urls")),
+    # REST API: tokens, docs, the catalog and the orders (namespace "api").
+    # Before the catalog: books.urls is included at "" and must not get
+    # the first chance at /api/...
+    path("api/", include("api.urls")),
+    # "Log in" / "Log out" in the top right corner of the browsable API
+    # (the HTML pages of /api/... in a browser). A separate include: the
+    # templates of DRF look for the namespace "rest_framework" exactly,
+    # inside "api" it would be "api:rest_framework".
+    path("api/auth/", include("rest_framework.urls")),
     # Bookstore catalog lives at the site root; namespace "books" comes
     # from app_name in books/urls.py
     path("", include("books.urls")),

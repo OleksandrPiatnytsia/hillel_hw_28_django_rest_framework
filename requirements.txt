@@ -13,3 +13,13 @@ uvicorn==0.54.0
 uvicorn-worker==0.4.0
 stripe==16.1.0
 whitenoise==6.12.0
+# REST API (app api/): serializers, ViewSets, routers, the browsable API
+djangorestframework==3.18.3
+# Filters in the API: ?category=..&price_min=.. (FilterSet classes)
+django-filter==26.2
+# JWT tokens: /api/token/, /api/token/refresh/, /api/token/verify/
+djangorestframework-simplejwt==5.5.1
+# OpenAPI schema + Swagger UI (/api/docs/) and ReDoc (/api/redoc/)
+drf-spectacular==0.30.0
+# CORS headers for /api/: a frontend on another domain may call the API
+django-cors-headers==4.9.0

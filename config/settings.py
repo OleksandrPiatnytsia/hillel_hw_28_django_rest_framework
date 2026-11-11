@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 import os
 import sys
+from datetime import timedelta
 from importlib.util import find_spec
 from pathlib import Path
 
@@ -50,12 +51,22 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # REST API (settings in the "REST API" section below)
+    "rest_framework",
+    # Not for models (we don't use the token blacklist): its translations
+    # of the error messages ("Token is invalid or expired") come with the app
+    "rest_framework_simplejwt",
+    "django_filters",
+    "drf_spectacular",
+    "corsheaders",
     # Local apps
     "users",
     "books",
     "cart",
     "orders",
     "payments",
+    # The whole REST API layer: serializers, ViewSets, permissions, URLs
+    "api",
 ]
 
 # Custom user model (users.User instead of auth.User). Must be set before
@@ -86,6 +97,10 @@ MIDDLEWARE = [
     # below) and activates it for the view and the templates. After
     # SessionMiddleware, before CommonMiddleware (Django docs).
     "django.middleware.locale.LocaleMiddleware",
+    # CORS headers (Access-Control-Allow-Origin, ...) for /api/ only, see
+    # CORS_URLS_REGEX. Before CommonMiddleware (django-cors-headers docs):
+    # a redirect made by CommonMiddleware (adding the "/") gets them too.
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -368,6 +383,118 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 SITE_URL = os.getenv("SITE_URL", "http://localhost:8000").rstrip("/")
 
 
+# REST API (app api/, URLs under /api/)
+# https://www.django-rest-framework.org/api-guide/settings/
+
+REST_FRAMEWORK = {
+    # Who is the user of an API request; the first class that recognises
+    # the request wins:
+    #   - JWT: header "Authorization: Bearer <access token>" (other
+    #     services, mobile apps, a frontend on another domain);
+    #   - session: the cookie of the site login. For the browsable API and
+    #     Swagger in the same browser. It checks the CSRF token for POST /
+    #     PATCH / DELETE, so another site can't use the visitor's cookie.
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    # Closed by default: a new endpoint without its own permission_classes
+    # requires a login instead of being open to everybody by mistake.
+    # The catalog (read for everybody) and the others set their own.
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    # Every list: 20 objects per page, ?page=2 for the next ones.
+    # The answer: {"count": 135, "next": "...?page=2", "previous": null,
+    # "results": [...]}
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+    # ?category=3&author=5 (FilterSet classes), ?search=... and
+    # ?ordering=-price for the ViewSets that declare the fields
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
+    # Request limits. Counters live in the cache (Redis; in tests the
+    # in-memory cache, cleared before every test). Over the limit:
+    # 429 Too Many Requests + header Retry-After (seconds to wait).
+    #   - anonymous: counted per IP address;
+    #   - user: per user id, whichever IP he comes from.
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/hour",
+        "user": "1000/hour",
+        # Getting a token = checking a password: a low limit against
+        # password guessing (api.views.ThrottledTokenObtainPairView)
+        "token": "10/minute",
+    },
+    # The OpenAPI schema for /api/docs/ is built by drf-spectacular
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+# JWT tokens (djangorestframework-simplejwt)
+# https://django-rest-framework-simplejwt.readthedocs.io/en/latest/settings.html
+#
+#   POST /api/token/          {"username", "password"} -> {"access", "refresh"}
+#   POST /api/token/refresh/  {"refresh"}              -> {"access"}
+#   POST /api/token/verify/   {"token"}                -> 200 or 401
+#
+# The access token goes with every request; it is short: a stolen one works
+# only for 15 minutes. The refresh token only gets new access tokens.
+# Signed with SECRET_KEY (algorithm HS256): changing the key makes every
+# issued token invalid.
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    # The header is "Authorization: Bearer <token>"
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+# API documentation (drf-spectacular): /api/schema/ (OpenAPI, YAML),
+# /api/docs/ (Swagger UI), /api/redoc/ (ReDoc)
+# https://drf-spectacular.readthedocs.io/en/latest/settings.html
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Bookstore API",
+    "DESCRIPTION": (
+        "REST API of the bookstore: the catalog (books, authors, "
+        "categories) and orders. Authentication: JWT "
+        "(POST /api/token/, then the header \"Authorization: Bearer "
+        "<access>\") or the session of the site login."
+    ),
+    "VERSION": "1.0.0",
+    # The schema itself is not shown as an endpoint in Swagger
+    "SERVE_INCLUDE_SCHEMA": False,
+    # Separate request and response models (BookRequest / Book): the
+    # read-only fields (id, created_at) are not in the request form
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SWAGGER_UI_SETTINGS": {
+        # Swagger remembers the token after "Authorize" until the page closes
+        "persistAuthorization": True,
+    },
+}
+
+# CORS: may JavaScript from another domain call our API?
+# https://github.com/adamchainz/django-cors-headers
+#
+# A browser lets a page from http://localhost:3000 read an answer from
+# http://localhost:8000 only if the answer has
+# "Access-Control-Allow-Origin: http://localhost:3000". Servers, curl and
+# Postman don't care about CORS, only browsers do.
+# The list comes from .env (comma separated), empty = nobody.
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+# Only the API: the pages of the site (forms, the cart, the payment) are
+# never opened to other domains
+CORS_URLS_REGEX = r"^/api/.*$"
+
+
 # Logging
 # https://docs.djangoproject.com/en/6.1/topics/logging/
 #
@@ -445,6 +572,11 @@ LOGGING = {
             "propagate": False,
         },
         "payments": {
+            "handlers": ["console", "file"],
+            "level": APP_LOG_LEVEL,
+            "propagate": False,
+        },
+        "api": {
             "handlers": ["console", "file"],
             "level": APP_LOG_LEVEL,
             "propagate": False,
