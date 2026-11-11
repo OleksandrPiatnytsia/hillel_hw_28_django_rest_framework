@@ -10,7 +10,7 @@ coverage report --format=markdown --precision=2         # таблиця ниж�
 Налаштування в `.coveragerc`: рахується лише власний код (без `.venv`,
 тестів, міграцій і файлів налаштувань). `pytest.ini` вимагає щонайменше 70%.
 
-Загалом **97.41%**, 286 тестів. REST API (`api/`): **100%** кожен файл
+Загалом **97.42%**, 287 тестів. REST API (`api/`): **100%** кожен файл
 (74 тести в `tests/api/`). Моделі `books`, `orders`, `payments`: **100%**
 лише від `tests/unit/test_models.py`.
 
@@ -43,7 +43,7 @@ coverage report --format=markdown --precision=2         # таблиця ниж�
 | books/management/commands/seed\_books.py             |       23 |        0 |    100.00% |
 | books/models.py                                      |       78 |        0 |    100.00% |
 | books/urls.py                                        |        4 |        0 |    100.00% |
-| books/views.py                                       |      114 |        3 |     97.37% |
+| books/views.py                                       |      125 |        3 |     97.60% |
 | cart/\_\_init\_\_.py                                 |        0 |        0 |    100.00% |
 | cart/apps.py                                         |        5 |        0 |    100.00% |
 | cart/cart.py                                         |       63 |        0 |    100.00% |
@@ -91,4 +91,4 @@ coverage report --format=markdown --precision=2         # таблиця ниж�
 | users/signals.py                                     |       18 |        1 |     94.44% |
 | users/urls.py                                        |        4 |        0 |    100.00% |
 | users/views.py                                       |       78 |        5 |     93.59% |
-| **TOTAL**                                            | **2043** |   **53** | **97.41%** |
+| **TOTAL**                                            | **2054** |   **53** | **97.42%** |

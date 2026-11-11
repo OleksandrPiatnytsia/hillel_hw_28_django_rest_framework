@@ -14,7 +14,7 @@ from pytest_django.asserts import assertRedirects
 
 from books.models import Book
 
-from ..factories import AuthorFactory, BookFactory, CategoryFactory, UserFactory
+from ..factories import AuthorFactory, BookFactory, CategoryFactory, OrderFactory, UserFactory
 from ..helpers import message_levels
 
 pytestmark = pytest.mark.django_db
@@ -57,9 +57,11 @@ def test_manager_creates_edits_and_deletes_a_book(manager_client):
     assert (book.price, book.stock) == (Decimal("300.00"), 2)
     assert message_levels(edited)[-1] == "success"  # "created" is still in the list
 
-    # Delete: the confirmation page shows the title, POST deletes
+    # Delete: the confirmation page shows the title and the button, POST deletes
     confirm = manager_client.get(reverse("books:delete", args=[book.pk]))
     assert "Kobzar" in confirm.content.decode()
+    assert confirm.context["orders_count"] == 0
+    assert 'class="btn btn-danger"' in confirm.content.decode()
     deleted = manager_client.post(reverse("books:delete", args=[book.pk]), follow=True)
     assertRedirects(deleted, reverse("books:list"))
     assert message_levels(deleted)[-1] == "success"
@@ -93,6 +95,27 @@ def test_editor_cannot_delete_a_book(editor_client):
     book = BookFactory()
 
     assert editor_client.post(reverse("books:delete", args=[book.pk])).status_code == 403
+    assert Book.objects.filter(pk=book.pk).exists()
+
+
+def test_a_book_in_orders_is_not_deleted_and_the_manager_sees_why(manager_client):
+    # OrderItem.book: on_delete=PROTECT. Before the fix: 500 (ProtectedError)
+    book = BookFactory(title="Kobzar")
+    OrderFactory(items=[(book, 1)])
+    OrderFactory(items=[(book, 2)])
+
+    # The confirmation page warns at once and has no "Yes, delete" button
+    confirm = manager_client.get(reverse("books:delete", args=[book.pk]))
+    # POST anyway (an old open tab, or the book was ordered after the page
+    # was opened): back to the book with the reason, the book stays
+    deleted = manager_client.post(reverse("books:delete", args=[book.pk]), follow=True)
+
+    assert confirm.context["orders_count"] == 2
+    # No red "Yes, delete" button (its text is translated, so the button
+    # is found by its class; the navbar has other submit buttons)
+    assert 'class="btn btn-danger"' not in confirm.content.decode()
+    assertRedirects(deleted, book.get_absolute_url())
+    assert message_levels(deleted) == ["error"]
     assert Book.objects.filter(pk=book.pk).exists()
 
 

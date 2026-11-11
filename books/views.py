@@ -1,9 +1,11 @@
 import logging
 
+from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
-from django.db.models import Count, Q
+from django.db.models import Count, ProtectedError, Q
 from django.http import JsonResponse
+from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils.formats import number_format
 from django.utils.translation import gettext
@@ -185,6 +187,14 @@ class BookDeleteView(PermissionRequiredMixin, SuccessMessageMixin, DeleteView):
     """GET -> confirmation page, POST -> delete.
 
     Template: books/book_confirm_delete.html
+
+    A book that is in orders can't be deleted: OrderItem.book has
+    on_delete=PROTECT, the order history must stay complete. Then:
+    - GET: the page says so at once (orders_count) and has no delete button,
+      only "Edit" (stock = 0 stops the sales);
+    - POST anyway (an old open tab, or the book was ordered after the page
+      was opened): delete() raises ProtectedError -> an error message and
+      back to the book, instead of 500.
     """
 
     permission_required = "books.delete_book"
@@ -194,10 +204,37 @@ class BookDeleteView(PermissionRequiredMixin, SuccessMessageMixin, DeleteView):
     # the confirmation page shows the author's name
     queryset = Book.objects.select_related("author")
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Lines of orders with this book = orders: one line per book in an
+        # order (unique constraint of OrderItem)
+        context["orders_count"] = self.object.order_items.count()
+        return context
+
     def form_valid(self, form):
         # Remember pk BEFORE deleting: after delete() Django sets it to None
         book_id = self.object.pk
-        response = super().form_valid(form)
+        try:
+            response = super().form_valid(form)
+        except ProtectedError:
+            # Raised while Django collects the related rows, before any
+            # DELETE: nothing is deleted. SuccessMessageMixin adds its
+            # message after super().form_valid(), so no "was deleted" either.
+            logger.warning(
+                "Book not deleted, it is in orders: id=%s title=%r by user=%s",
+                book_id,
+                self.object.title,
+                self.request.user.username,
+            )
+            messages.error(
+                self.request,
+                gettext(
+                    "“%(title)s” is in orders and can't be deleted. "
+                    "Set its stock to 0 to stop selling it."
+                )
+                % {"title": self.object.title},
+            )
+            return redirect(self.object)
         logger.info(
             "Book deleted: id=%s title=%r by user=%s",
             book_id,

@@ -11,7 +11,7 @@ Stripe, дві мови, async view, тести). У цьому ДЗ — **REST 
 - пагінація по 20, фільтри django-filter, пошук і сортування, throttling;
 - документація Swagger / ReDoc (`/api/docs/`), CORS для `/api/`;
 - `Idempotency-Key` для створення замовлень: повторений запит не створює друге замовлення;
-- 74 тести API з `APIClient`; покриття `api/` — 100%, усього — 97.41%
+- 74 тести API з `APIClient`; покриття `api/` — 100%, усього — 97.42%
   ([`COVERAGE.md`](COVERAGE.md)).
 
 ## Стек
@@ -84,7 +84,7 @@ Stripe, дві мови, async view, тести). У цьому ДЗ — **REST 
 | `/<pk>/` | `books:detail` | `BookDetailView` | усі | сторінка книги |
 | `/create/` | `books:create` | `BookCreateView` | `books.add_book` | додавання книги |
 | `/<pk>/update/` | `books:update` | `BookUpdateView` | `books.change_book` | редагування книги |
-| `/<pk>/delete/` | `books:delete` | `BookDeleteView` | `books.delete_book` | підтвердження й видалення |
+| `/<pk>/delete/` | `books:delete` | `BookDeleteView` | `books.delete_book` | підтвердження й видалення; книга в замовленнях не видаляється (`PROTECT`): попередження замість кнопки, «залишок 0» для зняття з продажу |
 | `/authors/` | `books:author_list` | `AuthorListView` | усі | автори з кількістю книг |
 | `/authors/<pk>/` | `books:author_detail` | `AuthorDetailView` | усі | автор, біографія та його книги |
 | `/search/?q=` | `books:search` | `book_search` (**async**) | усі, GET | JSON: до 8 книг для підказок пошуку |
@@ -1206,11 +1206,11 @@ open htmlcov/index.html               # непокриті рядки підсв
 | | Кількість | Що перевіряють |
 |---|---|---|
 | `tests/unit/` | 151 | одна функція, модель, форма або один запит |
-| `tests/integration/` | 54 | сценарії з кількох кроків: кошик → замовлення → Stripe → webhook → лист |
+| `tests/integration/` | 55 | сценарії з кількох кроків: кошик → замовлення → Stripe → webhook → лист |
 | `tests/api/` | 74 | REST API через `APIClient`: токени, права кожної ролі, фільтри, замовлення, CORS, throttling |
 | `tests/test_setup.py` | 7 | сама інфраструктура: налаштування, фабрики, фейки |
 
-Покриття **97.41%** (таблиця по файлах — [`COVERAGE.md`](COVERAGE.md)); `--cov-fail-under=70` у `pytest.ini`: якщо покриття впаде
+Покриття **97.42%** (таблиця по файлах — [`COVERAGE.md`](COVERAGE.md)); `--cov-fail-under=70` у `pytest.ini`: якщо покриття впаде
 нижче 70%, `pytest` завершиться з помилкою.
 
 ### Структура
