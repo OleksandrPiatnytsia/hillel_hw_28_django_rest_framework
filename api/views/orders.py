@@ -18,7 +18,7 @@ Who sees what (get_queryset):
 import logging
 
 from django.db.models import Q, Sum
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -29,6 +29,7 @@ from orders.models import Order
 from orders.services import OrderError, cancel_order, create_order
 from payments.models import Payment
 
+from ..docs import ORDER_CANCEL, ORDER_CANCEL_ERRORS, ORDER_CREATE, UNAUTHORIZED, order_list_schema
 from ..exceptions import Conflict
 from ..permissions import IsOwnerOrReadOnly
 from ..serializers.orders import OrderCreateSerializer, OrderSerializer
@@ -36,6 +37,7 @@ from ..serializers.orders import OrderCreateSerializer, OrderSerializer
 logger = logging.getLogger(__name__)  # "api.views.orders"
 
 
+@order_list_schema
 class OrderViewSet(
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
@@ -84,7 +86,15 @@ class OrderViewSet(
             return queryset
         return queryset.filter(user=self.request.user)
 
-    @extend_schema(request=OrderCreateSerializer, responses={201: OrderSerializer})
+    @extend_schema(
+        request=OrderCreateSerializer,
+        responses={
+            201: OrderSerializer,
+            400: OpenApiResponse(description="Invalid fields or not enough copies."),
+            401: UNAUTHORIZED,
+        },
+        **ORDER_CREATE,
+    )
     def create(self, request, *args, **kwargs):
         """POST /api/orders/: check the request, create the order, answer with it.
 
@@ -121,7 +131,9 @@ class OrderViewSet(
             status=status.HTTP_201_CREATED,
         )
 
-    @extend_schema(request=None, responses={200: OrderSerializer})
+    @extend_schema(
+        request=None, responses={200: OrderSerializer, **ORDER_CANCEL_ERRORS}, **ORDER_CANCEL
+    )
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         """POST /api/orders/<pk>/cancel/: the customer cancels a new unpaid order.

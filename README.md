@@ -1,16 +1,17 @@
-# hillel_hw_25 — Django: практичне використання AI
+# hillel_hw_28 — Django REST Framework
 
-Навчальний Django-проєкт (Hillel). Продовження ДЗ №24 (книгарня: кошик, замовлення,
-Stripe, дві мови, async view, тести). У цьому ДЗ AI покращує проєкт:
+Навчальний Django-проєкт (Hillel). Продовження ДЗ №25 (книгарня: кошик, замовлення,
+Stripe, дві мови, async view, тести). У цьому ДЗ — **REST API** для каталогу й
+замовлень (див. «REST API»):
 
-- **code review трьох view** (`checkout`, `BookListView`, async `order_status`):
-  16 рекомендацій, кожна прийнята або відхилена з причиною, 5 прийнятих внесено
-  в код разом із тестами — [`AI_REVIEW.md`](AI_REVIEW.md);
-- **тести моделей**, написані з AI і перевірені вручну: позначка
-  `# Generated with AI, reviewed and modified`, покриття моделей `Book`, `Order`,
-  `Payment` — 100%;
-- **документація**: docstrings для view, де їх не було; промпти й висновки —
-  [`AI_PROMPTS.md`](AI_PROMPTS.md); звіт про покриття — [`COVERAGE.md`](COVERAGE.md) (96.75%).
+- ViewSets і router: книги, автори, категорії, замовлення; вкладені серіалізатори;
+- JWT (`/api/token/`, `refresh/`, `verify/`) і сесія сайту;
+- права: `IsAuthenticated`, `IsAdminUser`-подібний `IsStaffOrReadOnly`, права
+  груп (`DjangoModelPermissions`), власний `IsOwnerOrReadOnly`;
+- пагінація по 20, фільтри django-filter, пошук і сортування, throttling;
+- документація Swagger / ReDoc (`/api/docs/`), CORS для `/api/`;
+- 64 тести API з `APIClient`; покриття `api/` — 100%, усього — 97.36%
+  ([`COVERAGE.md`](COVERAGE.md)).
 
 ## Стек
 
@@ -19,6 +20,8 @@ Stripe, дві мови, async view, тести). У цьому ДЗ AI покр
 - Docker, docker compose; gunicorn + uvicorn (ASGI); WhiteNoise (статика без nginx)
 - `psycopg-pool`: пул з'єднань з базою
 - gettext (`makemessages` / `compilemessages`), Django i18n
+- Django REST Framework 3.18: djangorestframework-simplejwt (JWT), django-filter,
+  drf-spectacular (OpenAPI, Swagger UI, ReDoc), django-cors-headers
 - Bootstrap 5.3 (через CDN, із перевіркою `integrity`)
 - Pillow: перевірка зображень для `ImageField`
 - python-dotenv: налаштування з `.env`
@@ -112,13 +115,207 @@ Stripe, дві мови, async view, тести). У цьому ДЗ AI покр
 будуються тільки за іменами: `{% url 'books:detail' book.pk %}`,
 `reverse_lazy("books:list")`.
 
+## REST API
+
+API для зовнішніх клієнтів (мобільний застосунок, фронтенд на іншому домені,
+інший сервіс). Окремий застосунок `api/` без власних моделей: серіалізатори,
+ViewSets і права працюють з моделями `books` і `orders` і викликають ті самі
+сервіси, що й сайт (`create_order()`, `cancel_order()`). Правила — одні.
+
+Документація: **http://localhost:8000/api/docs/** (Swagger UI, можна
+виконувати запити), `/api/redoc/` (для читання), `/api/schema/` (OpenAPI 3, YAML).
+
+### Адреси
+
+| Метод і URL | Хто | Що робить |
+|---|---|---|
+| `GET /api/` | усі | список розділів API |
+| `POST /api/token/` | усі, 10/хв | `username` + `password` → `access` + `refresh` |
+| `POST /api/token/refresh/` | усі | `refresh` → новий `access` |
+| `POST /api/token/verify/` | усі | чи дійсний токен (200 / 401) |
+| `GET /api/books/`, `/api/books/<id>/` | усі | книги з вкладеними автором і категоріями |
+| `POST /api/books/` | `books.add_book` (Editors, Managers) | нова книга |
+| `PUT`, `PATCH /api/books/<id>/` | `books.change_book` | змінити книгу; `stock` — лише з `books.manage_stock` |
+| `DELETE /api/books/<id>/` | `books.delete_book` (Managers) | видалити; книга в замовленнях → 409 |
+| `GET /api/authors/[<id>/]`, `/api/categories/[<id>/]` | усі | автори й категорії з `books_count` |
+| `POST`, `PUT`, `PATCH`, `DELETE` авторів і категорій | `is_staff` **і** право моделі | як в адмінці; є книги → 409 на `DELETE` |
+| `GET /api/orders/` | залогінені | свої замовлення; персонал (`is_staff`) — усі |
+| `POST /api/orders/` | залогінені | нове замовлення одразу з позиціями |
+| `GET /api/orders/<id>/` | власник або персонал | чуже для клієнта → 404 |
+| `POST /api/orders/<id>/cancel/` | лише власник | скасувати нове неоплачене; персонал → 403, вже скасоване або оплачене → 409 |
+| `/api/auth/login/` | усі | вхід для browsable API (HTML-сторінки `/api/...` у браузері) |
+
+`PUT` / `PATCH` / `DELETE` замовлень немає (405): статус змінює менеджер в адмінці,
+статус оплати — платежі.
+
+### Автентифікація: JWT і сесія
+
+```python
+# config/settings.py
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",  # Authorization: Bearer <access>
+        "rest_framework.authentication.SessionAuthentication",        # cookie входу на сайт
+    ],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],  # закрито за замовчуванням
+    ...
+}
+SIMPLE_JWT = {"ACCESS_TOKEN_LIFETIME": timedelta(minutes=15), "REFRESH_TOKEN_LIFETIME": timedelta(days=1)}
+```
+
+```bash
+# 1. токени
+curl -X POST http://localhost:8000/api/token/ -H "Content-Type: application/json" \
+     -d '{"username": "ann", "password": "..."}'
+# {"refresh": "eyJ...", "access": "eyJ..."}
+
+# 2. запит з access-токеном
+curl http://localhost:8000/api/orders/ -H "Authorization: Bearer eyJ..."
+
+# 3. через 15 хвилин access прострочено (401) -> новий без пароля
+curl -X POST http://localhost:8000/api/token/refresh/ -H "Content-Type: application/json" \
+     -d '{"refresh": "eyJ..."}'
+```
+
+- Токен підписаний `SECRET_KEY` (HS256) і містить `user_id` і термін дії; база
+  на кожен запит не потрібна для перевірки підпису, лише щоб завантажити користувача.
+- Сесія — для Swagger і browsable API в браузері: хто увійшов на сайт, той
+  увійшов і в API. Для `POST` / `PATCH` / `DELETE` сесія вимагає CSRF-токен,
+  тому чужий сайт не може скористатися cookie відвідувача.
+  **Тому в Swagger, відкритому в браузері з входом на сайт, запити йдуть від
+  цього користувача** навіть без «Authorize»; перевіряти JWT — у вікні інкогніто.
+- Невдалий вхід логується сигналом `user_login_failed` (`users/signals.py`):
+  simplejwt викликає `authenticate()`. Успішний — рядком `API token issued`.
+
+### Права доступу
+
+```python
+# api/views/catalog.py
+class BookViewSet(LoggedModelViewSet):
+    permission_classes = [DjangoModelPermissionsOrAnonReadOnly]
+    # GET — усім; POST -> add_book, PUT/PATCH -> change_book, DELETE -> delete_book
+
+class CategoryViewSet(LoggedModelViewSet):
+    permission_classes = [IsStaffOrReadOnly, DjangoModelPermissionsOrAnonReadOnly]
+    # запис: is_staff І право групи — як в адмінці
+
+# api/views/orders.py
+class OrderViewSet(...):
+    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
+```
+
+- **`IsOwnerOrReadOnly`** (`api/permissions.py`) — власний клас: читати може
+  кожен, хто отримав об'єкт, змінювати — лише власник (`obj.user_id == request.user.pk`).
+  *Що* бачить користувач, вирішує `get_queryset()`: клієнт — свої замовлення
+  (чуже → 404, а не 403, щоб не підказувати, що таке замовлення існує),
+  персонал — усі. Тому менеджер читає будь-яке замовлення, але `cancel` чужого → 403.
+- **`IsStaffOrReadOnly`** — `IsAdminUser` для запису, читання для всіх (у DRF
+  такого класу немає).
+- **Залишок (`stock`)** — як у `BookForm`: без `books.manage_stock` змінити його
+  не можна (403). Надіслати *поточне* значення можна: клієнт, що робить `PUT`
+  з усіма прочитаними полями, не отримає помилку.
+- Анонім на запис отримує **401** (з токеном запит міг би пройти), залогінений
+  без права — **403**.
+
+### Серіалізатори: читання вкладене, запис через id
+
+```json
+GET /api/books/7/
+{"id": 7, "title": "Kobzar",
+ "author": {"id": 3, "name": "Taras Shevchenko"},
+ "categories": [{"id": 1, "name": "Poetry", "slug": "poetry"}],
+ "price": "250.50", "stock": 4, "in_stock": true,
+ "cover": "http://localhost:8000/media/covers/2026/11/kobzar.jpg", ...}
+
+POST /api/books/
+{"title": "Kobzar", "author_id": 3, "category_ids": [1], "price": "250.50"}
+```
+
+```python
+class BookSerializer(serializers.ModelSerializer):
+    author = AuthorShortSerializer(read_only=True)                       # читання: об'єкт
+    author_id = serializers.PrimaryKeyRelatedField(source="author",      # запис: id
+                                                   queryset=Author.objects.all(), write_only=True)
+```
+
+Ціни — рядки (`"250.50"`), а не числа: так у JSON не губляться копійки на округленні float.
+
+### Замовлення без кошика
+
+Кошика в API немає — **рішення**: кошик — це частина інтерфейсу сайту (сесія
+відвідувача між сторінками), а клієнт API надсилає вже готове замовлення.
+Кошик сайту й далі живе в сесії.
+
+```json
+POST /api/orders/
+{"full_name": "Ann Shevchenko", "phone": "+380 67 123 45 67", "address": "Kyiv, Khreshchatyk 1",
+ "items": [{"book_id": 7, "quantity": 2}, {"book_id": 9, "quantity": 1}]}
+```
+
+1. `OrderCreateSerializer` перевіряє запит; позиції — вкладений
+   `OrderItemCreateSerializer(many=True)`: книга існує, `quantity >= 1`, одна
+   книга — один рядок. Телефон — та сама `normalize_phone()`, що на сайті.
+2. `create_order()` — та сама функція, що на сайті: блокування книг
+   (`select_for_update`), перевірка залишку, ціни з каталогу, резерв, лист після COMMIT.
+3. Не вистачає примірників → **400** `{"items": ["«Kobzar»: залишився лише 1 примірник, а ви замовили 3."]}`,
+   нічого не збережено.
+4. **201** — замовлення у форматі `GET /api/orders/<id>/`.
+
+Ціни, сума й статуси з запиту не беруться (`"total": "1.00"` проігнорується).
+Оплата — на сайті: у відповіді є `site_url`, сторінка замовлення з кнопкою «Pay»
+(Stripe Checkout — сторінка для людини).
+
+### Пагінація, фільтри, пошук, сортування
+
+- Усі списки — по **20**: `{"count": 135, "next": ".../?page=2", "previous": null, "results": [...]}`.
+- Книги (`api/filters.py`, `BookFilter` з django-filter — ті самі, що на сторінці каталогу):
+  `?category=<slug>`, `?author=<id>`, `?price_min=`, `?price_max=`, `?stock=in_stock|low|out`.
+  Неправильне значення → 400 з помилкою параметра (сайт такі ігнорує й показує
+  підказку; для програми це помилка в її коді).
+- `?search=kobz` — у назві й імені автора; `?ordering=-price` (`title`, `price`,
+  `created_at`, `author__name`). `StableOrderingFilter` додає `pk` останнім:
+  книги з однаковою ціною не перескакують між сторінками.
+- Замовлення: `?status=`, `?payment_status=`, `?ordering=total`.
+- Кількість SQL-запитів не залежить від розміру сторінки: книги — 3, замовлення — 4
+  (`select_related`, `prefetch_related`, `annotate(Sum(...))`); перевіряється тестами.
+
+### Throttling, CORS, помилки
+
+```python
+"DEFAULT_THROTTLE_RATES": {"anon": "100/hour", "user": "1000/hour", "token": "10/minute"},
+CORS_ALLOWED_ORIGINS = [... з .env ...]
+CORS_URLS_REGEX = r"^/api/.*$"
+```
+
+- **Throttling**: анонім — за IP, користувач — за id; `/api/token/` окремо 10 на
+  хвилину (кожен запит — перевірка пароля). Лічильники в кеші (Redis). Понад
+  ліміт — **429** і заголовок `Retry-After`.
+- **CORS** (`django-cors-headers`): браузер дозволить JavaScript з
+  `http://localhost:3000` прочитати відповідь API, лише якщо цей origin є в
+  `CORS_ALLOWED_ORIGINS`. Тільки для `/api/`: сторінки сайту закриті для інших
+  доменів. curl, Postman і сервери CORS не перевіряють.
+- **Коди**: 400 — неправильні дані (помилки по полях), 401 — немає або
+  недійсний токен, 403 — немає права, 404, 405 — дія не підтримується,
+  **409 Conflict** — запит правильний, але стан даних не дозволяє: видалити книгу
+  з замовлень, автора чи категорію з книгами (`on_delete=PROTECT`), скасувати
+  оплачене замовлення. 429 — ліміт.
+- Тексти помилок — мовою запиту (`Accept-Language: en`), за замовчуванням українською.
+
+### Документація (drf-spectacular)
+
+Схему OpenAPI drf-spectacular будує з коду: адреси, серіалізатори (поля й типи),
+фільтри. Описи для клієнта — `extend_schema` в `api/docs.py`, бо docstrings у
+коді написані для розробника; хук `remove_component_descriptions` прибирає їх і
+з розділу «Schemas». `manage.py spectacular --validate --fail-on-warn` проходить
+без попереджень.
+
 ## Структура
 
 ```
 config/
 ├── settings.py              # PostgreSQL, Redis, WhiteNoise, AUTH_USER_MODEL, Debug Toolbar, LOGGING
 ├── settings_test.py         # налаштування для pytest: швидкий хеш паролів, LocMemCache, без пулу
-├── urls.py                  # admin + books + accounts/ + cart/ + orders/ + payments/ + health/ + i18n/
+├── urls.py                  # admin + books + accounts/ + cart/ + orders/ + payments/ + api/ + health/ + i18n/
 ├── asgi.py                  # ASGI-застосунок (Docker: gunicorn + uvicorn)
 ├── views.py                 # health (async), set_language
 ├── i18n.py                  # is_supported_language(), set_language_cookie()
@@ -189,6 +386,19 @@ payments/
 ├── emails.py                # лист «payment received»
 ├── admin.py                 # inline для замовлення, список платежів
 └── templates/payments/      # payment_success, emails/
+api/                         # REST API (без моделей), див. «REST API»
+├── urls.py                  # router + токени + документація, namespace "api"
+├── views/
+│   ├── auth.py              # токени з throttling, публічний корінь /api/
+│   ├── catalog.py           # BookViewSet, AuthorViewSet, CategoryViewSet (+ лог, 409)
+│   └── orders.py            # OrderViewSet: list, retrieve, create, cancel
+├── serializers/
+│   ├── catalog.py           # вкладені автор і категорії, author_id / category_ids, stock
+│   └── orders.py            # OrderSerializer, OrderCreateSerializer з позиціями
+├── permissions.py           # IsStaffOrReadOnly, IsOwnerOrReadOnly
+├── filters.py               # BookFilter, StableOrderingFilter
+├── exceptions.py            # Conflict (409)
+└── docs.py                  # описи для Swagger (extend_schema), хук схеми
 templates/                   # спільні шаблони проєкту
 ├── base.html
 ├── 403.html                 # «Access denied»
@@ -375,6 +585,7 @@ ENABLE_DEBUG_TOOLBAR = (
 | `books` | так само | створення, зміна (`form.changed_data`), видалення книжок, хто це зробив |
 | `orders` | DEBUG / INFO | листи (надіслано / помилка з traceback), `cancel_unpaid_orders` |
 | `payments` | DEBUG / INFO | створення сторінки оплати, зміни статусів платежів, події webhook |
+| `api` | DEBUG / INFO | видача JWT, створення / зміна (які поля) / видалення через API, замовлення й скасування, хто це зробив |
 | `config` | INFO | рядок на кожен запит від `RequestTimingMiddleware` |
 | `django` | WARNING | 404, 403 одним рядком; 500 з traceback |
 
@@ -931,6 +1142,7 @@ pip install -r requirements-dev.txt
 docker compose up -d db               # тестова база test_bookstore створюється в цьому PostgreSQL
 pytest                                # усі тести + покриття (термінал і htmlcov/index.html)
 pytest tests/unit                     # лише unit
+pytest tests/api --no-cov             # лише REST API
 pytest -k webhook --no-cov            # кілька тестів за назвою, без покриття (швидше)
 open htmlcov/index.html               # непокриті рядки підсвічені
 ```
@@ -939,9 +1151,10 @@ open htmlcov/index.html               # непокриті рядки підсв
 |---|---|---|
 | `tests/unit/` | 151 | одна функція, модель, форма або один запит |
 | `tests/integration/` | 54 | сценарії з кількох кроків: кошик → замовлення → Stripe → webhook → лист |
+| `tests/api/` | 64 | REST API через `APIClient`: токени, права кожної ролі, фільтри, замовлення, CORS, throttling |
 | `tests/test_setup.py` | 7 | сама інфраструктура: налаштування, фабрики, фейки |
 
-Покриття **96.75%** (таблиця по файлах — [`COVERAGE.md`](COVERAGE.md)); `--cov-fail-under=70` у `pytest.ini`: якщо покриття впаде
+Покриття **97.36%** (таблиця по файлах — [`COVERAGE.md`](COVERAGE.md)); `--cov-fail-under=70` у `pytest.ini`: якщо покриття впаде
 нижче 70%, `pytest` завершиться з помилкою.
 
 ### Структура
@@ -959,6 +1172,11 @@ tests/
 │   ├── test_async_views.py        # async view через AsyncClient
 │   ├── test_payment_services.py   # відмови й помилки оплат
 │   └── test_translation_catalog.py  # .po повний, .mo скомпільований
+├── api/
+│   ├── conftest.py                # api_client, get_tokens(user), as_user(user), editor
+│   ├── test_setup.py              # JWT, ліміт /api/token/, документація, CORS
+│   ├── test_catalog.py            # книги, автори, категорії: права, фільтри, 409, мова помилок
+│   └── test_orders.py             # свої / чужі замовлення, створення, скасування, 405
 └── integration/
     ├── test_checkout_flow.py      # зокрема гонка: два покупці за останній примірник
     ├── test_payment_flow.py       # Stripe: сторінка, повернення, webhook, один лист
@@ -1028,6 +1246,7 @@ docker compose exec web python manage.py seed_books            # якщо баз
 
 - Сайт: http://localhost:8000/
 - Адмінка: http://localhost:8000/admin/
+- API: http://localhost:8000/api/, документація: http://localhost:8000/api/docs/
 - Стан: http://localhost:8000/health/
 - Лог: `docker compose logs -f web`, події Stripe: `docker compose logs -f stripe-cli`
 
@@ -1181,7 +1400,8 @@ docker compose exec -u root web chown -R app:app /app/media
 | `REDIS_URL` | Redis для кешу й сесій; у Docker compose ставить `redis://redis:6379/0` | `redis://localhost:6379/0` |
 | `EMAIL_HOST_USER` | адреса Gmail; порожня → листи в консоль | `name@gmail.com` |
 | `EMAIL_HOST_PASSWORD` | App Password Google (16 літер), не пароль акаунта | |
-| `SITE_URL` | адреса сайту для посилань у листах | `http://localhost:8000` |
+| `SITE_URL` | адреса сайту для посилань у листах і `site_url` в API | `http://localhost:8000` |
+| `CORS_ALLOWED_ORIGINS` | домени фронтендів, яким браузер дозволить читати `/api/` (через кому); порожньо — нікому | `http://localhost:3000` |
 | `STRIPE_SECRET_KEY` | секретний ключ Stripe, тестовий режим | `sk_test_...` |
 | `STRIPE_WEBHOOK_SECRET` | підпис webhook; друкує `stripe-cli listen --print-secret` | `whsec_...` |
 
@@ -1338,6 +1558,15 @@ ORDER BY:  андрій, Андрій, Борис, Гліб, Ґанна, Євг�
   імена авторів і категорії зберігаються однією мовою (так, як їх внесли).
 - **Сторінка Stripe не українською.** Stripe Checkout не має української:
   для `uk` передається `locale="auto"` (мова браузера), для `en` — `"en"`.
+- **JWT не можна відкликати.** Виданий токен дійсний до кінця терміну (access —
+  15 хвилин, refresh — 1 день) навіть після зміни пароля; «вийти» з API — це
+  забути токени на клієнті. Відкликання — `token_blacklist` simplejwt (таблиця в базі).
+- **Обкладинки й оплата — лише на сайті.** API віддає адресу обкладинки, але не
+  приймає файл (перевірки розміру й типу — у `BookForm`); оплата — через
+  `site_url` замовлення.
+- **Повторний `POST /api/orders/`** (клієнт не дочекався відповіді й надіслав ще
+  раз) створить друге замовлення; захист — заголовок `Idempotency-Key`. Зайве
+  замовлення клієнт може скасувати, а неоплачені скасовує `cancel_unpaid_orders`.
 - **Асинхронний ORM Django 6.1 — обгортка.** Запити до бази все одно йдуть у
   потоці (`sync_to_async`); виграш у тому, що event loop не чекає на них.
 

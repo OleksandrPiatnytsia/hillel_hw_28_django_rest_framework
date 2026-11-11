@@ -473,6 +473,13 @@ SPECTACULAR_SETTINGS = {
     # Separate request and response models (BookRequest / Book): the
     # read-only fields (id, created_at) are not in the request form
     "COMPONENT_SPLIT_REQUEST": True,
+    # Run on the finished schema: the default hook (enums as named
+    # components: OrderStatusEnum, ...) + ours (no developer docstrings of
+    # the serializers in the "Schemas" section, api/docs.py)
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "api.docs.remove_component_descriptions",
+    ],
     "SWAGGER_UI_SETTINGS": {
         # Swagger remembers the token after "Authorize" until the page closes
         "persistAuthorization": True,

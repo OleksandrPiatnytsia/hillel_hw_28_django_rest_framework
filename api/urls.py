@@ -27,9 +27,13 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
-from .views.auth import PublicAPIRootView, ThrottledTokenObtainPairView
+from .views.auth import (
+    DocumentedTokenRefreshView,
+    DocumentedTokenVerifyView,
+    PublicAPIRootView,
+    ThrottledTokenObtainPairView,
+)
 from .views.catalog import AuthorViewSet, BookViewSet, CategoryViewSet
 from .views.orders import OrderViewSet
 
@@ -53,8 +57,8 @@ router.register("orders", OrderViewSet, basename="order")
 
 urlpatterns = [
     path("token/", ThrottledTokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
-    path("token/verify/", TokenVerifyView.as_view(), name="token_verify"),
+    path("token/refresh/", DocumentedTokenRefreshView.as_view(), name="token_refresh"),
+    path("token/verify/", DocumentedTokenVerifyView.as_view(), name="token_verify"),
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     # url_name: where the page loads the schema from; "api:" because of
     # the namespace of this file

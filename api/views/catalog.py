@@ -30,6 +30,7 @@ from rest_framework.permissions import DjangoModelPermissionsOrAnonReadOnly
 
 from books.models import Author, Book, Category
 
+from ..docs import author_schema, book_schema, category_schema
 from ..exceptions import Conflict
 from ..filters import BookFilter
 from ..permissions import IsStaffOrReadOnly
@@ -77,6 +78,7 @@ class LoggedModelViewSet(viewsets.ModelViewSet):
         )
 
 
+@book_schema
 class BookViewSet(LoggedModelViewSet):
     """Books of the catalog.
 
@@ -103,6 +105,7 @@ class BookViewSet(LoggedModelViewSet):
     protected_message = _("The book is in orders and can't be deleted.")
 
 
+@author_schema
 class AuthorViewSet(LoggedModelViewSet):
     """Authors. ?search=<name>, ?ordering=name | -books_count."""
 
@@ -116,6 +119,7 @@ class AuthorViewSet(LoggedModelViewSet):
     protected_message = _("The author has books and can't be deleted.")
 
 
+@category_schema
 class CategoryViewSet(LoggedModelViewSet):
     """Categories. ?search=<name>, ?ordering=name | -books_count."""
 

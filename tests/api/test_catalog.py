@@ -367,3 +367,17 @@ def test_api_root_lists_the_sections(api_client):
     response = api_client.get("/api/")
 
     assert set(response.json()) == {"books", "authors", "categories", "orders"}
+
+
+def test_api_errors_come_in_the_language_of_the_request(as_user, manager):
+    # LocaleMiddleware: the Accept-Language header (no cookie in an API
+    # client); without it - LANGUAGE_CODE, Ukrainian
+    category = CategoryFactory()
+    BookFactory(categories=[category])
+    client = as_user(manager)
+
+    default = client.delete(f"/api/categories/{category.pk}/")
+    english = client.delete(f"/api/categories/{category.pk}/", HTTP_ACCEPT_LANGUAGE="en")
+
+    assert default.json() == {"detail": "У категорії є книги, її не можна видалити."}
+    assert english.json() == {"detail": "The category has books and can't be deleted."}

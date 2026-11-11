@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Bookstore\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 13:52+0000\n"
+"POT-Creation-Date: 2026-11-11 11:54+0000\n"
 "PO-Revision-Date: 2026-11-10 16:00+0200\n"
 "Last-Translator: Bookstore\n"
 "Language-Team: Ukrainian\n"
@@ -16,6 +16,35 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=4; plural=(n % 1 == 0 && n % 10 == 1 && n % 100 != 11 ? 0 : n % 1 == 0 && n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 1 : n % 1 == 0 && (n % 10 ==0 || (n % 10 >=5 && n % 10 <=9) || (n % 100 >=11 && n % 100 <=14 )) ? 2: 3);\n"
+
+#: api/exceptions.py:16
+msgid "The object is used by other objects and can't be deleted."
+msgstr "Об'єкт використовується іншими об'єктами, його не можна видалити."
+
+#: api/filters.py:34 books/forms.py:168
+msgid "“Price from” can't be greater than “Price to”."
+msgstr "«Ціна від» не може бути більшою за «Ціна до»."
+
+#: api/serializers/catalog.py:154 books/forms.py:82
+msgid "Only users with the “manage stock” permission can change it."
+msgstr "Змінювати можуть лише користувачі з правом «керування залишками»."
+
+#: api/serializers/orders.py:175
+msgid "Every book may be in the list only once; use quantity."
+msgstr ""
+"Кожна книга може бути в списку лише один раз; використовуйте quantity."
+
+#: api/views/catalog.py:105
+msgid "The book is in orders and can't be deleted."
+msgstr "Книга є в замовленнях, її не можна видалити."
+
+#: api/views/catalog.py:119
+msgid "The author has books and can't be deleted."
+msgstr "В автора є книги, його не можна видалити."
+
+#: api/views/catalog.py:132
+msgid "The category has books and can't be deleted."
+msgstr "У категорії є книги, її не можна видалити."
 
 #: books/admin.py:28 books/models.py:43 books/models.py:140
 msgid "category"
@@ -79,10 +108,6 @@ msgstr "JPG, PNG або WebP, до {size} МБ. Без обкладинки по
 #: books/forms.py:74
 msgid "— Choose an author —"
 msgstr "— Виберіть автора —"
-
-#: books/forms.py:82
-msgid "Only users with the “manage stock” permission can change it."
-msgstr "Змінювати можуть лише користувачі з правом «керування залишками»."
 
 #: books/forms.py:95
 #, python-format
@@ -157,10 +182,6 @@ msgstr "Ціна до"
 #: books/forms.py:156
 msgid "Sort by"
 msgstr "Сортування"
-
-#: books/forms.py:165
-msgid "“Price from” can't be greater than “Price to”."
-msgstr "«Ціна від» не може бути більшою за «Ціна до»."
 
 #: books/models.py:18
 msgid "In stock"
@@ -446,17 +467,17 @@ msgstr "Видалити обкладинку"
 msgid "Upload a new one to replace it:"
 msgstr "Завантажте нову, щоб замінити:"
 
-#: books/views.py:144
+#: books/views.py:146
 #, python-format
 msgid "Book “%(title)s” was created."
 msgstr "Книгу «%(title)s» створено."
 
-#: books/views.py:166
+#: books/views.py:168
 #, python-format
 msgid "Book “%(title)s” was updated."
 msgstr "Книгу «%(title)s» оновлено."
 
-#: books/views.py:209
+#: books/views.py:211
 #, python-format
 msgid "Book “%(title)s” was deleted."
 msgstr "Книгу «%(title)s» видалено."
@@ -569,20 +590,20 @@ msgstr "«%(title)s»: у кошику %(quantity)s, це все, що є на �
 msgid "“%(title)s”: %(quantity)s in the cart."
 msgstr "«%(title)s»: у кошику %(quantity)s."
 
-#: cart/views.py:74
+#: cart/views.py:81
 #, python-format
 msgid "“%(title)s” removed from the cart."
 msgstr "«%(title)s» прибрано з кошика."
 
-#: cart/views.py:81
+#: cart/views.py:93
 msgid "The cart is empty now."
 msgstr "Кошик тепер порожній."
 
-#: config/settings.py:252
+#: config/settings.py:267
 msgid "Ukrainian"
 msgstr "Українська"
 
-#: config/settings.py:253
+#: config/settings.py:268
 msgid "English"
 msgstr "Англійська"
 
@@ -984,11 +1005,11 @@ msgstr "Статус"
 msgid "You have no orders yet."
 msgstr "У вас поки немає замовлень."
 
-#: orders/views.py:34
+#: orders/views.py:36
 msgid "Your cart is empty."
 msgstr "Ваш кошик порожній."
 
-#: orders/views.py:68
+#: orders/views.py:70
 #, python-format
 msgid ""
 "%(order)s is created, the books are reserved for you. Pay for it with the "
@@ -997,7 +1018,7 @@ msgstr ""
 "%(order)s створено, книги зарезервовано для вас. Оплатіть його кнопкою "
 "«Оплатити»."
 
-#: orders/views.py:139
+#: orders/views.py:154
 #, python-format
 msgid "%(order)s is cancelled. The books are back in stock."
 msgstr "%(order)s скасовано. Книги повернено на склад."

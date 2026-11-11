@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Bookstore\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 13:52+0000\n"
+"POT-Creation-Date: 2026-11-11 11:54+0000\n"
 "PO-Revision-Date: 2026-11-10 16:00+0200\n"
 "Last-Translator: Bookstore\n"
 "Language-Team: English\n"
@@ -16,6 +16,34 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: api/exceptions.py:16
+msgid "The object is used by other objects and can't be deleted."
+msgstr ""
+
+#: api/filters.py:34 books/forms.py:168
+msgid "“Price from” can't be greater than “Price to”."
+msgstr ""
+
+#: api/serializers/catalog.py:154 books/forms.py:82
+msgid "Only users with the “manage stock” permission can change it."
+msgstr ""
+
+#: api/serializers/orders.py:175
+msgid "Every book may be in the list only once; use quantity."
+msgstr ""
+
+#: api/views/catalog.py:105
+msgid "The book is in orders and can't be deleted."
+msgstr ""
+
+#: api/views/catalog.py:119
+msgid "The author has books and can't be deleted."
+msgstr ""
+
+#: api/views/catalog.py:132
+msgid "The category has books and can't be deleted."
+msgstr ""
 
 #: books/admin.py:28 books/models.py:43 books/models.py:140
 msgid "category"
@@ -78,10 +106,6 @@ msgstr ""
 
 #: books/forms.py:74
 msgid "— Choose an author —"
-msgstr ""
-
-#: books/forms.py:82
-msgid "Only users with the “manage stock” permission can change it."
 msgstr ""
 
 #: books/forms.py:95
@@ -156,10 +180,6 @@ msgstr ""
 
 #: books/forms.py:156
 msgid "Sort by"
-msgstr ""
-
-#: books/forms.py:165
-msgid "“Price from” can't be greater than “Price to”."
 msgstr ""
 
 #: books/models.py:18
@@ -439,17 +459,17 @@ msgstr ""
 msgid "Upload a new one to replace it:"
 msgstr ""
 
-#: books/views.py:144
+#: books/views.py:146
 #, python-format
 msgid "Book “%(title)s” was created."
 msgstr ""
 
-#: books/views.py:166
+#: books/views.py:168
 #, python-format
 msgid "Book “%(title)s” was updated."
 msgstr ""
 
-#: books/views.py:209
+#: books/views.py:211
 #, python-format
 msgid "Book “%(title)s” was deleted."
 msgstr ""
@@ -560,20 +580,20 @@ msgstr ""
 msgid "“%(title)s”: %(quantity)s in the cart."
 msgstr ""
 
-#: cart/views.py:74
+#: cart/views.py:81
 #, python-format
 msgid "“%(title)s” removed from the cart."
 msgstr ""
 
-#: cart/views.py:81
+#: cart/views.py:93
 msgid "The cart is empty now."
 msgstr ""
 
-#: config/settings.py:252
+#: config/settings.py:267
 msgid "Ukrainian"
 msgstr ""
 
-#: config/settings.py:253
+#: config/settings.py:268
 msgid "English"
 msgstr ""
 
@@ -956,18 +976,18 @@ msgstr ""
 msgid "You have no orders yet."
 msgstr ""
 
-#: orders/views.py:34
+#: orders/views.py:36
 msgid "Your cart is empty."
 msgstr ""
 
-#: orders/views.py:68
+#: orders/views.py:70
 #, python-format
 msgid ""
 "%(order)s is created, the books are reserved for you. Pay for it with the "
 "“Pay” button."
 msgstr ""
 
-#: orders/views.py:139
+#: orders/views.py:154
 #, python-format
 msgid "%(order)s is cancelled. The books are back in stock."
 msgstr ""

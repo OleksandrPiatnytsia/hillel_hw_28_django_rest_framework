@@ -5,10 +5,13 @@ The ViewSets of the catalog are in catalog.py, the orders in orders.py.
 
 import logging
 
+from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import AllowAny
 from rest_framework.routers import APIRootView
 from rest_framework.throttling import ScopedRateThrottle
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
+
+from ..docs import TOKEN_OBTAIN, TOKEN_REFRESH, TOKEN_VERIFY
 
 logger = logging.getLogger(__name__)  # "api.views"
 
@@ -36,6 +39,7 @@ class ThrottledTokenObtainPairView(TokenObtainPairView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "token"
 
+    @extend_schema(**TOKEN_OBTAIN)
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
         # Here only after a successful login: a wrong password raises
@@ -47,6 +51,22 @@ class ThrottledTokenObtainPairView(TokenObtainPairView):
             request.META.get("REMOTE_ADDR", "-"),
         )
         return response
+
+
+class DocumentedTokenRefreshView(TokenRefreshView):
+    """POST /api/token/refresh/: simplejwt's view with a text for /api/docs/."""
+
+    @extend_schema(**TOKEN_REFRESH)
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
+
+class DocumentedTokenVerifyView(TokenVerifyView):
+    """POST /api/token/verify/: simplejwt's view with a text for /api/docs/."""
+
+    @extend_schema(**TOKEN_VERIFY)
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
 
 
 class PublicAPIRootView(APIRootView):
