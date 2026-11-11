@@ -25,25 +25,17 @@ import logging
 
 from django.db.models import Count, ProtectedError
 from django.utils.translation import gettext_lazy as _
-from rest_framework import status, viewsets
-from rest_framework.exceptions import APIException
+from rest_framework import viewsets
 from rest_framework.permissions import DjangoModelPermissionsOrAnonReadOnly
 
 from books.models import Author, Book, Category
 
+from ..exceptions import Conflict
 from ..filters import BookFilter
 from ..permissions import IsStaffOrReadOnly
 from ..serializers.catalog import AuthorSerializer, BookSerializer, CategorySerializer
 
 logger = logging.getLogger(__name__)  # "api.views.catalog"
-
-
-class Conflict(APIException):
-    """409 Conflict: the request is correct, the state of the data forbids it."""
-
-    status_code = status.HTTP_409_CONFLICT
-    default_detail = _("The object is used by other objects and can't be deleted.")
-    default_code = "conflict"
 
 
 class LoggedModelViewSet(viewsets.ModelViewSet):

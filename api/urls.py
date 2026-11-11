@@ -12,6 +12,9 @@
     /api/books/<pk>/        one book: read, update, delete
     /api/authors/[<pk>/]    authors, the same actions
     /api/categories/[<pk>/] categories, the same actions
+    /api/orders/            my orders (staff: all); POST a new order with items
+    /api/orders/<pk>/       one order
+    /api/orders/<pk>/cancel/  POST: cancel my new unpaid order
 
 One register() line of the router gives both URLs of a ViewSet, the list
 (/api/books/) and one object (/api/books/<pk>/).
@@ -28,6 +31,7 @@ from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
 from .views.auth import PublicAPIRootView, ThrottledTokenObtainPairView
 from .views.catalog import AuthorViewSet, BookViewSet, CategoryViewSet
+from .views.orders import OrderViewSet
 
 app_name = "api"
 
@@ -43,6 +47,9 @@ router = Router()
 router.register("books", BookViewSet)
 router.register("authors", AuthorViewSet)
 router.register("categories", CategoryViewSet)
+# basename: OrderViewSet has get_queryset() instead of a queryset attribute,
+# the router can't take the name from the model -> "api:order-list"
+router.register("orders", OrderViewSet, basename="order")
 
 urlpatterns = [
     path("token/", ThrottledTokenObtainPairView.as_view(), name="token_obtain_pair"),

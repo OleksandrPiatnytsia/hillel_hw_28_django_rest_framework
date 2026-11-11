@@ -27,3 +27,25 @@ class IsStaffOrReadOnly(BasePermission):
         if request.method in SAFE_METHODS:
             return True
         return bool(request.user and request.user.is_staff)
+
+
+class IsOwnerOrReadOnly(BasePermission):
+    """Read for everybody who got the object; change only for its owner.
+
+    An object-level permission: DRF calls has_object_permission() after
+    get_object() found the object (retrieve, update, delete, our "cancel"
+    action), not for lists.
+
+    Orders: the queryset of OrderViewSet already decides WHAT a user may
+    see (a customer: own orders, someone else's -> 404; staff: all). This
+    class decides who may CHANGE an order: only its owner. A manager reads
+    every order, but cancels a customer's order in the admin, where the
+    rules of a manager apply (refund, the shipped state), not here: 403.
+
+    The model needs a "user" field (the owner).
+    """
+
+    def has_object_permission(self, request, view, obj):
+        if request.method in SAFE_METHODS:
+            return True
+        return obj.user_id == request.user.pk

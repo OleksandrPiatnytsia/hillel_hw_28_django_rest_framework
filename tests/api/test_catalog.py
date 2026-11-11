@@ -363,7 +363,7 @@ def test_category_and_author_with_books_cannot_be_deleted(as_user, manager):
     assert Author.objects.filter(pk=author.pk).exists()
 
 
-def test_api_root_lists_the_catalog_sections(api_client):
+def test_api_root_lists_the_sections(api_client):
     response = api_client.get("/api/")
 
-    assert set(response.json()) == {"books", "authors", "categories"}
+    assert set(response.json()) == {"books", "authors", "categories", "orders"}
