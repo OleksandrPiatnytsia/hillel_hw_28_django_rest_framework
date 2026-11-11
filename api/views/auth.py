@@ -1,6 +1,6 @@
 """Views of the API that are not about one model: tokens and the API root.
 
-The ViewSets of the catalog and the orders come in their own modules.
+The ViewSets of the catalog are in catalog.py, the orders in orders.py.
 """
 
 import logging

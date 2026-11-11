@@ -414,13 +414,15 @@ REST_FRAMEWORK = {
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",
-        "rest_framework.filters.OrderingFilter",
+        # OrderingFilter of DRF + "pk" as the last column: a stable order
+        # for the pages (api/filters.py)
+        "api.filters.StableOrderingFilter",
     ],
     # Request limits. Counters live in the cache (Redis; in tests the
     # in-memory cache, cleared before every test). Over the limit:
     # 429 Too Many Requests + header Retry-After (seconds to wait).
     #   - anonymous: counted per IP address;
-    #   - user: per user id, whichever IP he comes from.
+    #   - user: per user id, whichever IP address the requests come from.
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",

@@ -8,9 +8,13 @@
     /api/docs/              Swagger UI: the documentation + "Try it out"
     /api/redoc/             ReDoc: the same documentation, for reading
 
-The ViewSets (books, authors, categories, orders) are registered in the
-router in the next stages: one register() line gives both URLs of a
-ViewSet, the list (/api/books/) and one object (/api/books/<pk>/).
+    /api/books/             books: list, create; ?filters, ?search, ?ordering
+    /api/books/<pk>/        one book: read, update, delete
+    /api/authors/[<pk>/]    authors, the same actions
+    /api/categories/[<pk>/] categories, the same actions
+
+One register() line of the router gives both URLs of a ViewSet, the list
+(/api/books/) and one object (/api/books/<pk>/).
 """
 
 from django.urls import path
@@ -22,7 +26,8 @@ from drf_spectacular.views import (
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
-from .views import PublicAPIRootView, ThrottledTokenObtainPairView
+from .views.auth import PublicAPIRootView, ThrottledTokenObtainPairView
+from .views.catalog import AuthorViewSet, BookViewSet, CategoryViewSet
 
 app_name = "api"
 
@@ -33,6 +38,11 @@ class Router(DefaultRouter):
 
 
 router = Router()
+# register(prefix, ViewSet): /api/books/ and /api/books/<pk>/, URL names
+# "api:book-list" and "api:book-detail" (basename from the queryset model)
+router.register("books", BookViewSet)
+router.register("authors", AuthorViewSet)
+router.register("categories", CategoryViewSet)
 
 urlpatterns = [
     path("token/", ThrottledTokenObtainPairView.as_view(), name="token_obtain_pair"),

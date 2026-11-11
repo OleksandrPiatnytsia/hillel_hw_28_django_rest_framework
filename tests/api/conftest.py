@@ -12,7 +12,7 @@ response.json() of APIClient is the parsed JSON answer.
 import pytest
 from rest_framework.test import APIClient
 
-from tests.factories import DEFAULT_PASSWORD
+from tests.factories import DEFAULT_PASSWORD, UserFactory
 
 
 @pytest.fixture
@@ -40,3 +40,28 @@ def get_tokens(api_client):
         return response.json()
 
     return _get_tokens
+
+
+@pytest.fixture
+def editor(db):
+    """An editor: adds and changes books, but no deleting and no stock.
+
+    Not staff: the API checks only the permissions of the group.
+    """
+    return UserFactory(username="editor", groups=["Editors"])
+
+
+@pytest.fixture
+def as_user(api_client):
+    """as_user(user) -> an APIClient logged in as this user.
+
+    force_authenticate(): request.user without a token or a session, for
+    the tests that are about permissions, not about the login itself
+    (that one is tested with real tokens in test_setup.py).
+    """
+
+    def _as_user(user):
+        api_client.force_authenticate(user)
+        return api_client
+
+    return _as_user
