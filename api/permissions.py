@@ -13,22 +13,6 @@ Several classes in permission_classes = ALL of them must allow.
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 
-class IsStaffOrReadOnly(BasePermission):
-    """Read (GET, HEAD, OPTIONS) for everybody; write only for staff (is_staff).
-
-    The same as IsAdminUser of DRF for writing; DRF has no "or read only"
-    version of it. Used together with DjangoModelPermissionsOrAnonReadOnly
-    for authors and categories: like in the admin, a write needs BOTH the
-    staff flag and the permission of the group ("Managers" may delete a
-    category, "Editors" may not).
-    """
-
-    def has_permission(self, request, view):
-        if request.method in SAFE_METHODS:
-            return True
-        return bool(request.user and request.user.is_staff)
-
-
 class IsOwnerOrReadOnly(BasePermission):
     """Read for everybody who got the object; change only for its owner.
 

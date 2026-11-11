@@ -162,10 +162,10 @@ def test_no_cors_header_for_an_unknown_origin(api_client):
     assert "Access-Control-Allow-Origin" not in response
 
 
-def test_no_cors_header_on_the_site_pages(client):
+def test_no_cors_header_on_the_site_pages(api_client):
     # CORS_URLS_REGEX: only /api/. The catalog page of the site stays closed
     # even for an allowed origin
-    response = client.get("/", HTTP_ORIGIN="http://localhost:3000")
+    response = api_client.get("/", HTTP_ORIGIN="http://localhost:3000")
 
     assert response.status_code == 200
     assert "Access-Control-Allow-Origin" not in response

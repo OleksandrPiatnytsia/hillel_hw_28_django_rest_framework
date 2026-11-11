@@ -6,12 +6,12 @@ Stripe, дві мови, async view, тести). У цьому ДЗ — **REST 
 
 - ViewSets і router: книги, автори, категорії, замовлення; вкладені серіалізатори;
 - JWT (`/api/token/`, `refresh/`, `verify/`) і сесія сайту;
-- права: `IsAuthenticated`, `IsAdminUser`-подібний `IsStaffOrReadOnly`, права
-  груп (`DjangoModelPermissions`), власний `IsOwnerOrReadOnly`;
+- права: `IsAuthenticated`, `IsAdminUser`, права груп (`DjangoModelPermissions`),
+  власний `IsOwnerOrReadOnly`;
 - пагінація по 20, фільтри django-filter, пошук і сортування, throttling;
 - документація Swagger / ReDoc (`/api/docs/`), CORS для `/api/`;
 - `Idempotency-Key` для створення замовлень: повторений запит не створює друге замовлення;
-- 74 тести API з `APIClient`; покриття `api/` — 100%, усього — 97.42%
+- 76 тестів API з `APIClient`; покриття `api/` — 100%, усього — 97.42%
   ([`COVERAGE.md`](COVERAGE.md)).
 
 ## Стек
@@ -139,11 +139,11 @@ ViewSets і права працюють з моделями `books` і `orders` 
 | `PUT`, `PATCH /api/books/<id>/` | `books.change_book` | змінити книгу; `stock` — лише з `books.manage_stock` |
 | `DELETE /api/books/<id>/` | `books.delete_book` (Managers) | видалити; книга в замовленнях → 409 |
 | `GET /api/authors/[<id>/]`, `/api/categories/[<id>/]` | усі | автори й категорії з `books_count` |
-| `POST`, `PUT`, `PATCH`, `DELETE` авторів і категорій | `is_staff` **і** право моделі | як в адмінці; є книги → 409 на `DELETE` |
+| `POST`, `PUT`, `PATCH`, `DELETE` авторів і категорій | `IsAdminUser` (`is_staff`) **і** право моделі | як в адмінці; є книги → 409 на `DELETE` |
 | `GET /api/orders/` | залогінені | свої замовлення; персонал (`is_staff`) — усі |
 | `POST /api/orders/` | залогінені | нове замовлення одразу з позиціями; необов'язковий заголовок `Idempotency-Key` |
 | `GET /api/orders/<id>/` | власник або персонал | чуже для клієнта → 404 |
-| `POST /api/orders/<id>/cancel/` | лише власник | скасувати нове неоплачене; персонал → 403, вже скасоване або оплачене → 409 |
+| `POST /api/orders/<id>/cancel/` | лише власник | скасувати нове неоплачене; чуже замовлення для персоналу → 403, вже скасоване або оплачене → 409 |
 | `/api/auth/login/` | усі | вхід для browsable API (HTML-сторінки `/api/...` у браузері) |
 
 `PUT` / `PATCH` / `DELETE` замовлень немає (405): статус змінює менеджер в адмінці,
@@ -196,9 +196,11 @@ class BookViewSet(LoggedModelViewSet):
     permission_classes = [DjangoModelPermissionsOrAnonReadOnly]
     # GET — усім; POST -> add_book, PUT/PATCH -> change_book, DELETE -> delete_book
 
-class CategoryViewSet(LoggedModelViewSet):
-    permission_classes = [IsStaffOrReadOnly, DjangoModelPermissionsOrAnonReadOnly]
-    # запис: is_staff І право групи — як в адмінці
+class StaffWriteMixin:                     # AuthorViewSet, CategoryViewSet
+    def get_permissions(self):            # окремі права для читання й запису
+        if self.request.method in SAFE_METHODS:
+            return [AllowAny()]
+        return [IsAdminUser(), DjangoModelPermissions()]   # is_staff І право групи — як в адмінці
 
 # api/views/orders.py
 class OrderViewSet(...):
@@ -210,8 +212,11 @@ class OrderViewSet(...):
   *Що* бачить користувач, вирішує `get_queryset()`: клієнт — свої замовлення
   (чуже → 404, а не 403, щоб не підказувати, що таке замовлення існує),
   персонал — усі. Тому менеджер читає будь-яке замовлення, але `cancel` чужого → 403.
-- **`IsStaffOrReadOnly`** — `IsAdminUser` для запису, читання для всіх (у DRF
-  такого класу немає).
+- **`IsAdminUser`** (DRF) пропускає лише `is_staff`. Сам по собі він дозволив би
+  будь-якому співробітнику видаляти категорії, тому поруч `DjangoModelPermissions`:
+  `is_staff` відчиняє двері, група вирішує, що можна (Managers видаляють категорію,
+  редактор має `add_author`, але не `is_staff`). `get_permissions()` замість
+  `permission_classes`, бо читання відкрите всім, а `IsAdminUser` не має варіанта «або лише читання».
 - **Залишок (`stock`)** — як у `BookForm`: без `books.manage_stock` змінити його
   не можна (403). Надіслати *поточне* значення можна: клієнт, що робить `PUT`
   з усіма прочитаними полями, не отримає помилку.
@@ -446,12 +451,12 @@ api/                         # REST API (без моделей), див. «REST 
 ├── urls.py                  # router + токени + документація, namespace "api"
 ├── views/
 │   ├── auth.py              # токени з throttling, публічний корінь /api/
-│   ├── catalog.py           # BookViewSet, AuthorViewSet, CategoryViewSet (+ лог, 409)
+│   ├── catalog.py           # BookViewSet, AuthorViewSet, CategoryViewSet (+ лог, 409, StaffWriteMixin)
 │   └── orders.py            # OrderViewSet: list, retrieve, create, cancel
 ├── serializers/
 │   ├── catalog.py           # вкладені автор і категорії, author_id / category_ids, stock
 │   └── orders.py            # OrderSerializer, OrderCreateSerializer з позиціями
-├── permissions.py           # IsStaffOrReadOnly, IsOwnerOrReadOnly
+├── permissions.py           # IsOwnerOrReadOnly
 ├── filters.py               # BookFilter, StableOrderingFilter
 ├── exceptions.py            # Conflict (409)
 └── docs.py                  # описи для Swagger (extend_schema), хук схеми
@@ -1207,7 +1212,7 @@ open htmlcov/index.html               # непокриті рядки підсв
 |---|---|---|
 | `tests/unit/` | 151 | одна функція, модель, форма або один запит |
 | `tests/integration/` | 55 | сценарії з кількох кроків: кошик → замовлення → Stripe → webhook → лист |
-| `tests/api/` | 74 | REST API через `APIClient`: токени, права кожної ролі, фільтри, замовлення, CORS, throttling |
+| `tests/api/` | 76 | REST API через `APIClient`: токени, права кожної ролі, фільтри, замовлення, CORS, throttling |
 | `tests/test_setup.py` | 7 | сама інфраструктура: налаштування, фабрики, фейки |
 
 Покриття **97.42%** (таблиця по файлах — [`COVERAGE.md`](COVERAGE.md)); `--cov-fail-under=70` у `pytest.ini`: якщо покриття впаде
@@ -1616,7 +1621,7 @@ ORDER BY:  андрій, Андрій, Борис, Гліб, Ґанна, Євг�
   для `uk` передається `locale="auto"` (мова браузера), для `en` — `"en"`.
 - **JWT не можна відкликати.** Виданий токен дійсний до кінця терміну (access —
   15 хвилин, refresh — 1 день) навіть після зміни пароля; «вийти» з API — це
-  забути токени на клієнті. Відкликання — `token_blacklist` simplejwt (таблиця в базі).
+  забути токени на клієнті. Відкликання — `token_blacklist` simplejwt (див. «Плани»).
 - **Обкладинки й оплата — лише на сайті.** API віддає адресу обкладинки, але не
   приймає файл (перевірки розміру й типу — у `BookForm`); оплата — через
   `site_url` замовлення.
@@ -1631,3 +1636,6 @@ ORDER BY:  андрій, Андрій, Борис, Гліб, Ґанна, Євг�
 - валюти: модель `Currency` (UAH, USD);
 - скидання пароля й підтвердження email;
 - Celery: листи у фоні, `cancel_unpaid_orders` за розкладом (beat).
+- відкликання JWT: `token_blacklist` simplejwt — вихід з API (`POST /api/token/logout/`
+  кладе refresh у чорний список), `ROTATE_REFRESH_TOKENS` + `BLACKLIST_AFTER_ROTATION`,
+  недійсні токени після зміни пароля; потрібна міграція.

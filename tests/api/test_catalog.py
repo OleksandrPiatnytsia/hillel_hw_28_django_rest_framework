@@ -311,8 +311,16 @@ def test_anonymous_reads_authors_and_categories_with_books_count(api_client):
     assert api_client.get("/api/authors/?search=lesya").json()["count"] == 1
 
 
+@pytest.mark.parametrize("url", ["/api/authors/", "/api/categories/"])
+def test_anonymous_cannot_write_authors_and_categories(api_client, url):
+    # IsAdminUser for an anonymous user: 401 (with a token it could pass)
+    response = api_client.post(url, {"name": "New", "slug": "new"}, format="json")
+
+    assert response.status_code == 401
+
+
 def test_editor_without_staff_cannot_add_an_author(as_user, editor):
-    # Editors have add_author, but the API (like the admin) also wants is_staff
+    # Editors have add_author, but IsAdminUser (like the admin) wants is_staff
     response = as_user(editor).post("/api/authors/", {"name": "New Author"}, format="json")
 
     assert response.status_code == 403

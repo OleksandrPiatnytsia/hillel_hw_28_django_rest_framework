@@ -10,8 +10,8 @@ coverage report --format=markdown --precision=2         # таблиця ниж�
 Налаштування в `.coveragerc`: рахується лише власний код (без `.venv`,
 тестів, міграцій і файлів налаштувань). `pytest.ini` вимагає щонайменше 70%.
 
-Загалом **97.42%**, 287 тестів. REST API (`api/`): **100%** кожен файл
-(74 тести в `tests/api/`). Моделі `books`, `orders`, `payments`: **100%**
+Загалом **97.42%**, 289 тестів. REST API (`api/`): **100%** кожен файл
+(76 тестів у `tests/api/`). Моделі `books`, `orders`, `payments`: **100%**
 лише від `tests/unit/test_models.py`.
 
 Детальний звіт з підсвіченими непокритими рядками: `htmlcov/index.html`
@@ -24,14 +24,14 @@ coverage report --format=markdown --precision=2         # таблиця ниж�
 | api/docs.py                                          |       25 |        0 |    100.00% |
 | api/exceptions.py                                    |       11 |        0 |    100.00% |
 | api/filters.py                                       |       31 |        0 |    100.00% |
-| api/permissions.py                                   |       11 |        0 |    100.00% |
+| api/permissions.py                                   |        6 |        0 |    100.00% |
 | api/serializers/\_\_init\_\_.py                      |        0 |        0 |    100.00% |
 | api/serializers/catalog.py                           |       53 |        0 |    100.00% |
 | api/serializers/orders.py                            |       67 |        0 |    100.00% |
 | api/urls.py                                          |       15 |        0 |    100.00% |
 | api/views/\_\_init\_\_.py                            |        0 |        0 |    100.00% |
 | api/views/auth.py                                    |       26 |        0 |    100.00% |
-| api/views/catalog.py                                 |       55 |        0 |    100.00% |
+| api/views/catalog.py                                 |       57 |        0 |    100.00% |
 | api/views/orders.py                                  |       81 |        0 |    100.00% |
 | books/\_\_init\_\_.py                                |        0 |        0 |    100.00% |
 | books/admin.py                                       |       76 |       13 |     82.89% |
@@ -91,4 +91,4 @@ coverage report --format=markdown --precision=2         # таблиця ниж�
 | users/signals.py                                     |       18 |        1 |     94.44% |
 | users/urls.py                                        |        4 |        0 |    100.00% |
 | users/views.py                                       |       78 |        5 |     93.59% |
-| **TOTAL**                                            | **2054** |   **53** | **97.42%** |
+| **TOTAL**                                            | **2051** |   **53** | **97.42%** |

@@ -16,9 +16,10 @@ Who may do what:
                 POST, change_book for PUT/PATCH, delete_book for DELETE.
                 "Editors" add and change, "Managers" also delete. The stock
                 only with manage_stock (BookSerializer.validate_stock).
-    authors,    read: everybody; write: staff (IsStaffOrReadOnly) AND the
+    authors,    read: everybody; write: IsAdminUser (is_staff) AND the
     categories  model permission (like the admin): "Managers" may delete a
-                category, a staff member without the permission may not.
+                category, a staff member without the permission may not
+                (StaffWriteMixin).
 """
 
 import logging
@@ -26,14 +27,19 @@ import logging
 from django.db.models import Count, ProtectedError
 from django.utils.translation import gettext_lazy as _
 from rest_framework import viewsets
-from rest_framework.permissions import DjangoModelPermissionsOrAnonReadOnly
+from rest_framework.permissions import (
+    SAFE_METHODS,
+    AllowAny,
+    DjangoModelPermissions,
+    DjangoModelPermissionsOrAnonReadOnly,
+    IsAdminUser,
+)
 
 from books.models import Author, Book, Category
 
 from ..docs import author_schema, book_schema, category_schema
 from ..exceptions import Conflict
 from ..filters import BookFilter
-from ..permissions import IsStaffOrReadOnly
 from ..serializers.catalog import AuthorSerializer, BookSerializer, CategorySerializer
 
 logger = logging.getLogger(__name__)  # "api.views.catalog"
@@ -105,14 +111,37 @@ class BookViewSet(LoggedModelViewSet):
     protected_message = _("The book is in orders and can't be deleted.")
 
 
+class StaffWriteMixin:
+    """Read for everybody; write for staff with the model permission.
+
+    Different permissions for reading and writing: get_permissions() is
+    called for every request and returns the list of permission objects
+    that must ALL allow it (instead of the fixed permission_classes).
+
+        GET, HEAD, OPTIONS   AllowAny
+        POST, PUT, PATCH,    IsAdminUser (request.user.is_staff)
+        DELETE               AND DjangoModelPermissions (add_ / change_ /
+                             delete_<model> from the user's groups)
+
+    Both, like the Django admin: is_staff opens the door, the group decides
+    what may be done ("Managers" delete a category, a staff member without
+    a group may not; an editor has add_author but is not staff).
+    IsAdminUser alone would let any staff member delete any category.
+    """
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [AllowAny()]
+        return [IsAdminUser(), DjangoModelPermissions()]
+
+
 @author_schema
-class AuthorViewSet(LoggedModelViewSet):
+class AuthorViewSet(StaffWriteMixin, LoggedModelViewSet):
     """Authors. ?search=<name>, ?ordering=name | -books_count."""
 
     # Explicit order_by: Meta.ordering is ignored by annotated (GROUP BY) queries
     queryset = Author.objects.annotate(books_count=Count("books")).order_by("name", "pk")
     serializer_class = AuthorSerializer
-    permission_classes = [IsStaffOrReadOnly, DjangoModelPermissionsOrAnonReadOnly]
     search_fields = ["name"]
     ordering_fields = ["name", "books_count"]
     log_name = "Author"
@@ -120,12 +149,11 @@ class AuthorViewSet(LoggedModelViewSet):
 
 
 @category_schema
-class CategoryViewSet(LoggedModelViewSet):
+class CategoryViewSet(StaffWriteMixin, LoggedModelViewSet):
     """Categories. ?search=<name>, ?ordering=name | -books_count."""
 
     queryset = Category.objects.annotate(books_count=Count("books")).order_by("name", "pk")
     serializer_class = CategorySerializer
-    permission_classes = [IsStaffOrReadOnly, DjangoModelPermissionsOrAnonReadOnly]
     search_fields = ["name"]
     ordering_fields = ["name", "books_count"]
     log_name = "Category"
